@@ -6,16 +6,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from better_logger import BetterLoggerMiddleware, JsonRenderer, OllamaFailureAnalyzer, stage, story
+from runtime_narrative import RuntimeNarrativeMiddleware, JsonRenderer, OllamaFailureAnalyzer, stage, story
 
 from .db import create_customer, init_db, list_customers
 
-_model = os.getenv("BETTER_LOGGER_MODEL")
-_endpoint = os.getenv("BETTER_LOGGER_ENDPOINT", "http://127.0.0.1:11434/api/generate")
+_model = os.getenv("RUNTIME_NARRATIVE_MODEL")
+_endpoint = os.getenv("RUNTIME_NARRATIVE_ENDPOINT", "http://127.0.0.1:11434/api/generate")
 failure_analyzer = OllamaFailureAnalyzer(model=_model, endpoint=_endpoint) if _model else None
 
-# Switch to JsonRenderer by setting BETTER_LOGGER_JSON=1
-USE_JSON = os.getenv("BETTER_LOGGER_JSON", "0") == "1"
+# Switch to JsonRenderer by setting RUNTIME_NARRATIVE_JSON=1
+USE_JSON = os.getenv("RUNTIME_NARRATIVE_JSON", "0") == "1"
 renderers = [JsonRenderer()] if USE_JSON else None  # None → default ConsoleRenderer
 
 
@@ -32,12 +32,12 @@ async def lifespan(app: FastAPI):
                 pass
 
 
-app = FastAPI(title="Better Logger FastAPI Demo", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Runtime Narrative FastAPI Demo", version="0.1.0", lifespan=lifespan)
 
 # Middleware wraps every request in a story automatically.
 # Route handlers only need to declare stages — no story() context required.
 app.add_middleware(
-    BetterLoggerMiddleware,
+    RuntimeNarrativeMiddleware,
     renderers=renderers,
     failure_analyzer=failure_analyzer,
 )

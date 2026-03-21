@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "better-logger"
+name = "runtime-narrative"
 version = "0.1.0"
-description = "Better logger — model execution as human-readable stories"
+description = "runtime-narrative — model execution as human-readable stories"
 readme = "README.MD"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -14,7 +14,7 @@ requires-python = ">=3.9"
 authors = [
     { name = "Shashank Raj", email = "shashank.raj28@gmail.com" },
 ]
-keywords = ["logging", "observability", "tracing", "fastapi", "debugging", "better_logger"]
+keywords = ["logging", "observability", "tracing", "fastapi", "debugging", "runtime_narrative"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -44,9 +44,15 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sraj0501/better_logger"
-Repository = "https://github.com/sraj0501/better_logger"
-"Bug Tracker" = "https://github.com/sraj0501/better_logger/issues"
+Homepage = "https://github.com/sraj0501/runtime_narrative"
+Repository = "https://github.com/sraj0501/runtime_narrative"
+"Bug Tracker" = "https://github.com/sraj0501/runtime_narrative/issues"
 
 [tool.setuptools]
-packages = ["better_logger", "better_logger.renderer", "better_logger.analyzers"]
+packages = ["runtime_narrative", "runtime_narrative.renderer", "runtime_narrative.analyzers"]
+
+[dependency-groups]
+dev = [
+    "build>=1.4.0",
+    "twine>=6.2.0",
+]

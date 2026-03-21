@@ -16,16 +16,16 @@ uv run python examples/basic_ollama.py
 # Run FastAPI demo
 uv run python -m examples.fastapi_app.run
 # With Ollama failure analysis:
-BETTER_LOGGER_MODEL=llama3 uv run python -m examples.fastapi_app.run
+RUNTIME_NARRATIVE_MODEL=llama3 uv run python -m examples.fastapi_app.run
 # With a custom endpoint (vLLM, llama.cpp, etc.):
-BETTER_LOGGER_MODEL=llama3 BETTER_LOGGER_ENDPOINT=http://localhost:8000/api/generate uv run python -m examples.fastapi_app.run
+RUNTIME_NARRATIVE_MODEL=llama3 RUNTIME_NARRATIVE_ENDPOINT=http://localhost:8000/api/generate uv run python -m examples.fastapi_app.run
 ```
 
 No test suite exists yet.
 
 ## Architecture
 
-The library (`better_logger/`) models execution as **stories** composed of **stages**, emitting lifecycle events that renderers consume.
+The library (`runtime_narrative/`) models execution as **stories** composed of **stages**, emitting lifecycle events that renderers consume.
 
 ### Core execution flow
 
@@ -34,9 +34,9 @@ The library (`better_logger/`) models execution as **stories** composed of **sta
 3. **Context** (`context.py`) — two `ContextVar`s: `current_story` (holds the active `StoryRuntime`) and `current_stage_stack` (holds a list of nested `StageRecord`s). This enables propagation across sync/async without parameter threading.
 4. **Events** (`events.py`) — plain dataclasses: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`. `StoryRuntime.emit()` dispatches to all registered renderers via `renderer.handle(event)`.
 5. **Failure** (`failure.py`) — `summarize_exception()` inspects the traceback to find the root-cause frame, extracting filename/lineno/function/source_line and building `exception_chain` and `exact_cause` strings.
-6. **Renderers** (`better_logger/renderer/console.py`) — `ConsoleRenderer` handles all five event types. Uses `typer.secho` for color if `typer` is available, falls back to `print`. Renders LLM analysis in a terminal box via `_render_box`.
-7. **Analyzers** (`better_logger/analyzers/ollama.py`) — optional `OllamaFailureAnalyzer` calls a local Ollama model to produce LLM debug text, attached to `FailureOccurred.llm_analysis`.
-8. **Decorators** (`decorators.py`) — `@better_logger_story` and `@better_logger_stage` wrap sync/async functions in the respective context managers.
+6. **Renderers** (`runtime_narrative/renderer/console.py`) — `ConsoleRenderer` handles all five event types. Uses `typer.secho` for color if `typer` is available, falls back to `print`. Renders LLM analysis in a terminal box via `_render_box`.
+7. **Analyzers** (`runtime_narrative/analyzers/ollama.py`) — optional `OllamaFailureAnalyzer` calls a local Ollama model to produce LLM debug text, attached to `FailureOccurred.llm_analysis`.
+8. **Decorators** (`decorators.py`) — `@runtime_narrative_story` and `@runtime_narrative_stage` wrap sync/async functions in the respective context managers.
 
 ### Key design constraint
 

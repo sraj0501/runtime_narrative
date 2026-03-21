@@ -9,20 +9,20 @@ from starlette.responses import Response
 from .story import story
 
 
-class BetterLoggerMiddleware(BaseHTTPMiddleware):
+class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
     """
-    FastAPI/Starlette middleware that wraps every HTTP request in a better_logger story.
+    FastAPI/Starlette middleware that wraps every HTTP request in a runtime_narrative story.
 
     Each request gets a story named "<METHOD> <path>" (e.g. "POST /customers").
     The story context is available to all stages declared inside route handlers.
 
     Usage::
 
-        from better_logger.middleware import BetterLoggerMiddleware
-        from better_logger.renderer.json_renderer import JsonRenderer
+        from runtime_narrative.middleware import RuntimeNarrativeMiddleware
+        from runtime_narrative.renderer.json_renderer import JsonRenderer
 
         app.add_middleware(
-            BetterLoggerMiddleware,
+            RuntimeNarrativeMiddleware,
             renderers=[JsonRenderer()],   # optional, defaults to ConsoleRenderer
             failure_analyzer=None,        # optional OllamaFailureAnalyzer
         )
@@ -55,4 +55,4 @@ class BetterLoggerMiddleware(BaseHTTPMiddleware):
         return response
 
 
-__all__ = ["BetterLoggerMiddleware"]
+__all__ = ["RuntimeNarrativeMiddleware"]

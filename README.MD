@@ -1,4 +1,4 @@
-# better_logger
+# runtime_narrative
 
 Model your application's execution as **human-readable stories** instead of scattered log lines.
 
@@ -19,22 +19,22 @@ Recent stages: Validate Input=failed (0.001s)
 
 ```bash
 # Core only (zero dependencies)
-pip install better-logger
+pip install runtime-narrative
 
 # With colored console output
-pip install "better-logger[console]"
+pip install "runtime-narrative[console]"
 
 # With FastAPI middleware
-pip install "better-logger[fastapi]"
+pip install "runtime-narrative[fastapi]"
 
 # Everything
-pip install "better-logger[all]"
+pip install "runtime-narrative[all]"
 ```
 
 ## Quick start
 
 ```python
-from better_logger import story, stage
+from runtime_narrative import story, stage
 
 with story("Import Customers"):
     with stage("Load CSV"):
@@ -53,9 +53,9 @@ Add middleware once and every request gets a story automatically.
 Route handlers only need to declare stages:
 
 ```python
-from better_logger import BetterLoggerMiddleware, stage
+from runtime_narrative import RuntimeNarrativeMiddleware, stage
 
-app.add_middleware(BetterLoggerMiddleware)
+app.add_middleware(RuntimeNarrativeMiddleware)
 
 @app.post("/customers")
 async def create_customer(payload: CustomerIn):
@@ -70,14 +70,14 @@ async def create_customer(payload: CustomerIn):
 ## FastAPI — decorator style
 
 ```python
-from better_logger import better_logger_story, better_logger_stage
+from runtime_narrative import runtime_narrative_story, runtime_narrative_stage
 
 @app.post("/customers")
-@better_logger_story("Create Customer")
+@runtime_narrative_story("Create Customer")
 async def create_customer(payload: CustomerIn):
     return await _save(payload)
 
-@better_logger_stage("Save to Database")
+@runtime_narrative_stage("Save to Database")
 async def _save(payload):
     ...
 ```
@@ -87,9 +87,9 @@ async def _save(payload):
 Pipe one JSON object per lifecycle event to stdout, a file, or any stream:
 
 ```python
-from better_logger import BetterLoggerMiddleware, JsonRenderer
+from runtime_narrative import RuntimeNarrativeMiddleware, JsonRenderer
 
-app.add_middleware(BetterLoggerMiddleware, renderers=[JsonRenderer()])
+app.add_middleware(RuntimeNarrativeMiddleware, renderers=[JsonRenderer()])
 ```
 
 Output (one line per event):
@@ -103,7 +103,7 @@ Output (one line per event):
 Write to a file instead of stdout:
 
 ```python
-JsonRenderer(output=open("better_logger.log", "a"))
+JsonRenderer(output=open("runtime_narrative.log", "a"))
 ```
 
 ## LLM failure analysis
@@ -113,7 +113,7 @@ Plug in any LLM backend — model name and endpoint are always required (no defa
 **OpenAI-compatible backends** (vLLM, llama.cpp `--server`, LM Studio, Ollama OpenAI mode):
 
 ```python
-from better_logger import LLMFailureAnalyzer, story
+from runtime_narrative import LLMFailureAnalyzer, story
 
 analyzer = LLMFailureAnalyzer(
     model="llama3",
@@ -127,7 +127,7 @@ with story("Process Orders", failure_analyzer=analyzer):
 **Ollama native API:**
 
 ```python
-from better_logger import OllamaFailureAnalyzer, story
+from runtime_narrative import OllamaFailureAnalyzer, story
 
 analyzer = OllamaFailureAnalyzer(
     model="llama3",

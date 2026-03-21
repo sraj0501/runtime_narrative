@@ -1,9 +1,9 @@
 import os
 
-from better_logger import OllamaFailureAnalyzer, stage, story
+from runtime_narrative import OllamaFailureAnalyzer, stage, story
 
-model = os.environ["BETTER_LOGGER_MODEL"]
-endpoint = os.getenv("BETTER_LOGGER_ENDPOINT", "http://127.0.0.1:11434/api/generate")
+model = os.environ["RUNTIME_NARRATIVE_MODEL"]
+endpoint = os.getenv("RUNTIME_NARRATIVE_ENDPOINT", "http://127.0.0.1:11434/api/generate")
 analyzer = OllamaFailureAnalyzer(model=model, endpoint=endpoint)
 
 with story("Import Customers", failure_analyzer=analyzer):

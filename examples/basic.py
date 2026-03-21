@@ -1,4 +1,4 @@
-from better_logger import stage, story
+from runtime_narrative import stage, story
 
 
 with story("Import Customers"):

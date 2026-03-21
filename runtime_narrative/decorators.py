@@ -14,7 +14,7 @@ def _default_name(func: Callable[..., Any]) -> str:
     return func.__name__.replace("_", " ").strip().title()
 
 
-def better_logger_story(
+def runtime_narrative_story(
     name: str | None = None,
     *,
     renderers: Sequence[object] | None = None,
@@ -44,7 +44,7 @@ def better_logger_story(
     return decorator
 
 
-def better_logger_stage(name: str | None = None) -> Callable[[F], F]:
+def runtime_narrative_stage(name: str | None = None) -> Callable[[F], F]:
     """Decorator to wrap a function in a stage context (sync or async)."""
 
     def decorator(func: F) -> F:
