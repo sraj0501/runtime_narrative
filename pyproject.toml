@@ -44,9 +44,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/YOUR_USERNAME/better_logger"
-Repository = "https://github.com/YOUR_USERNAME/better_logger"
-"Bug Tracker" = "https://github.com/YOUR_USERNAME/better_logger/issues"
+Homepage = "https://github.com/sraj0501/better_logger"
+Repository = "https://github.com/sraj0501/better_logger"
+"Bug Tracker" = "https://github.com/sraj0501/better_logger/issues"
 
 [tool.setuptools]
 packages = ["better_logger", "better_logger.renderer", "better_logger.analyzers"]
