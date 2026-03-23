@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -47,6 +47,15 @@ class FailureOccurred:
     total_stages: int
     timestamp: datetime
     traceback_text: str
+    diagnostics_mode: str = "lean"
+    primary_frame_reason: str = "leaf"
+    stack_frames: list[dict[str, Any]] = field(default_factory=list)
+    source_snippet: str | None = None
+    compressed_stack_summary: str = ""
+    hidden_frame_count: int = 0
+    traceback_truncated: bool = False
+    locals_by_frame: dict[str, Any] | None = None
+    redaction_removed_keys: int = 0
 
 
 @dataclass
@@ -60,7 +69,16 @@ class StoryCompleted:
     timestamp: datetime
 
 
+@dataclass
+class LLMAnalysisReady:
+    story_id: str
+    story_name: str
+    stage_name: str
+    llm_analysis: str
+    timestamp: datetime
+
+
 from typing import Union
 
-Event = Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted]
+Event = Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted, LLMAnalysisReady]
 Renderer = Any

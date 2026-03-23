@@ -4,6 +4,7 @@ import inspect
 from functools import wraps
 from typing import Any, Callable, Sequence, TypeVar
 
+from .diagnostics import FailureDiagnosticsConfig
 from .stage import stage
 from .story import story
 
@@ -19,24 +20,41 @@ def runtime_narrative_story(
     *,
     renderers: Sequence[object] | None = None,
     failure_analyzer: Any | None = None,
+    background_analysis: bool = False,
+    diagnostics_config: FailureDiagnosticsConfig | None = None,
+    runtime_environment: str | None = None,
+    failure_diagnostics: str | None = None,
+    allow_rich_in_production: bool | None = None,
+    app_roots: Sequence[str] | None = None,
 ) -> Callable[[F], F]:
     """Decorator to wrap a function in a story context (sync or async)."""
 
     def decorator(func: F) -> F:
         story_name = name or _default_name(func)
 
+        story_kw: dict[str, Any] = {
+            "renderers": renderers,
+            "failure_analyzer": failure_analyzer,
+            "background_analysis": background_analysis,
+            "diagnostics_config": diagnostics_config,
+            "runtime_environment": runtime_environment,
+            "failure_diagnostics": failure_diagnostics,
+            "allow_rich_in_production": allow_rich_in_production,
+            "app_roots": app_roots,
+        }
+
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any):
-                with story(story_name, renderers=renderers, failure_analyzer=failure_analyzer):
+                async with story(story_name, **story_kw):
                     return await func(*args, **kwargs)
 
             return async_wrapper  # type: ignore[return-value]
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any):
-            with story(story_name, renderers=renderers, failure_analyzer=failure_analyzer):
+            with story(story_name, **story_kw):
                 return func(*args, **kwargs)
 
         return sync_wrapper  # type: ignore[return-value]
@@ -54,7 +72,7 @@ def runtime_narrative_stage(name: str | None = None) -> Callable[[F], F]:
 
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any):
-                with stage(stage_name):
+                async with stage(stage_name):
                     return await func(*args, **kwargs)
 
             return async_wrapper  # type: ignore[return-value]

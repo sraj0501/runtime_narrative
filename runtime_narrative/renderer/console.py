@@ -171,6 +171,44 @@ class ConsoleRenderer:
                 value_fg=self._failure_value_color,
             )
             self._label("Code:", event.source_line, label_fg=self._failure_color, value_fg=self._failure_value_color)
+            self._label(
+                "Diagnostics:",
+                f"{getattr(event, 'diagnostics_mode', 'lean')} (primary: {getattr(event, 'primary_frame_reason', 'leaf')})",
+                label_fg=self._failure_color,
+                value_fg=self._failure_value_color,
+            )
+            snippet = getattr(event, "source_snippet", None)
+            if snippet:
+                self._secho("Context:", fg=self._failure_color, bold=True)
+                for line in snippet.splitlines():
+                    self._secho(f"  {line}", fg=self._failure_value_color)
+            summary = getattr(event, "compressed_stack_summary", "")
+            if summary:
+                self._label(
+                    "Stack summary:",
+                    summary,
+                    label_fg=self._failure_color,
+                    value_fg=self._failure_value_color,
+                )
+            if getattr(event, "traceback_truncated", False):
+                self._label(
+                    "Traceback:",
+                    "truncated for environment limits",
+                    label_fg=self._failure_color,
+                    value_fg=self._failure_value_color,
+                )
+            locals_by_frame = getattr(event, "locals_by_frame", None)
+            if locals_by_frame:
+                self._secho("Locals (rich diagnostics):", fg=self._failure_color, bold=True)
+                for label, payload in locals_by_frame.items():
+                    locs = payload.get("locals", {})
+                    where = f"{payload.get('filename')}:{payload.get('lineno')} in {payload.get('function')}"
+                    self._secho(f"  {label} — {where}", fg=self._failure_heading_color)
+                    for k, v in locs.items():
+                        self._secho(f"    {k} = {v}", fg=self._failure_value_color)
+                removed = getattr(event, "redaction_removed_keys", 0)
+                if removed:
+                    self._label("Redacted keys:", str(removed), label_fg=self._failure_color, value_fg=self._failure_value_color)
             if not event.llm_analysis:
                 self._label(
                     "What happened:",
@@ -204,6 +242,17 @@ class ConsoleRenderer:
                 f"{event.progress_percent}% ({event.completed_stages} / {event.total_stages})",
                 label_fg=self._failure_color,
                 value_fg=self._failure_value_color,
+            )
+            return
+
+        if event_name == "LLMAnalysisReady":
+            self._secho("")
+            self._render_box(
+                "LLM Debug",
+                event.llm_analysis,
+                border_fg=self._failure_color,
+                text_fg=self._failure_value_color,
+                heading_fg=self._failure_heading_color,
             )
             return
 

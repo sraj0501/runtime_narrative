@@ -47,7 +47,7 @@ class JsonRenderer:
             })
 
         elif event_name == "FailureOccurred":
-            self._dump({
+            payload = {
                 "event": "FailureOccurred",
                 "story_id": event.story_id,
                 "story_name": event.story_name,
@@ -70,7 +70,19 @@ class JsonRenderer:
                     "total_stages": event.total_stages,
                 },
                 "timestamp": event.timestamp.isoformat(),
-            })
+                "diagnostics_mode": getattr(event, "diagnostics_mode", "lean"),
+                "primary_frame_reason": getattr(event, "primary_frame_reason", "leaf"),
+                "stack_frames": getattr(event, "stack_frames", []),
+                "source_snippet": getattr(event, "source_snippet", None),
+                "compressed_stack_summary": getattr(event, "compressed_stack_summary", ""),
+                "hidden_frame_count": getattr(event, "hidden_frame_count", 0),
+                "traceback_truncated": getattr(event, "traceback_truncated", False),
+                "locals_by_frame": getattr(event, "locals_by_frame", None),
+                "redaction_removed_keys": getattr(event, "redaction_removed_keys", 0),
+            }
+            if getattr(event, "traceback_text", None) is not None:
+                payload["traceback_text"] = event.traceback_text
+            self._dump(payload)
 
         elif event_name == "StoryCompleted":
             self._dump({
