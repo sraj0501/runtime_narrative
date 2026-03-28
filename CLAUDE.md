@@ -5,13 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (includes typer, uvicorn, fastapi, pydantic for examples)
+uv sync --group dev
+
+# Copy env var template (all vars are optional)
+cp .env.example .env
 
 # Run examples
 uv run python examples/basic.py
 uv run python examples/success.py
-uv run python examples/basic_ollama.py
+uv run python examples/basic_ollama.py  # requires RUNTIME_NARRATIVE_MODEL
 
 # Run FastAPI demo
 uv run python -m examples.fastapi_app.run

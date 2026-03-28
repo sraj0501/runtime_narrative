@@ -33,6 +33,12 @@ class stage:
         story_runtime.on_stage_started(self.record)
         return self.record
 
+    async def __aenter__(self) -> StageRecord:
+        return self.__enter__()
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return self.__exit__(exc_type, exc, tb)
+
     def __exit__(self, exc_type, exc, tb) -> bool:
         ended_at = datetime.now()
         self.record.ended_at = ended_at

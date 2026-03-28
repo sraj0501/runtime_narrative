@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Optional
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -114,6 +116,26 @@ class LLMFailureAnalyzer:
         return text or None
 
 
+    async def analyze_failure_async(
+        self,
+        *,
+        story_name: str,
+        stage_name: str,
+        failure: FailureSummary,
+        stage_timeline: str,
+        progress_percent: int,
+    ) -> Optional[str]:
+        fn = partial(
+            self.analyze_failure,
+            story_name=story_name,
+            stage_name=stage_name,
+            failure=failure,
+            stage_timeline=stage_timeline,
+            progress_percent=progress_percent,
+        )
+        return await asyncio.to_thread(fn)
+
+
 @dataclass
 class OllamaFailureAnalyzer:
     """
@@ -177,3 +199,22 @@ class OllamaFailureAnalyzer:
             return None
 
         return text or None
+
+    async def analyze_failure_async(
+        self,
+        *,
+        story_name: str,
+        stage_name: str,
+        failure: FailureSummary,
+        stage_timeline: str,
+        progress_percent: int,
+    ) -> Optional[str]:
+        fn = partial(
+            self.analyze_failure,
+            story_name=story_name,
+            stage_name=stage_name,
+            failure=failure,
+            stage_timeline=stage_timeline,
+            progress_percent=progress_percent,
+        )
+        return await asyncio.to_thread(fn)

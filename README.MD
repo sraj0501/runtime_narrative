@@ -267,6 +267,28 @@ Events: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`,
 
 `FailureOccurred` carries both the original location fields and the extended diagnostics fields above; custom renderers should use `getattr(event, "diagnostics_mode", "lean")` if they must stay compatible with older library versions.
 
+## Environment variables
+
+All variables are optional. Copy `.env.example` to `.env` as a starting point:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS` | `lean` or `rich` locals capture | `lean` |
+| `RUNTIME_NARRATIVE_ENV` | `production` forces lean diagnostics | unset |
+| `RUNTIME_NARRATIVE_ALLOW_RICH_IN_PRODUCTION` | Set `1` to override production guard | `0` |
+| `RUNTIME_NARRATIVE_MODEL` | LLM model name — enables failure analysis when set | unset |
+| `RUNTIME_NARRATIVE_ENDPOINT` | LLM generate endpoint | `http://127.0.0.1:11434/api/generate` |
+| `RUNTIME_NARRATIVE_JSON` | Set `1` to use `JsonRenderer` instead of console | `0` |
+| `RUNTIME_NARRATIVE_HOST` | FastAPI example host | `127.0.0.1` |
+| `RUNTIME_NARRATIVE_PORT` | FastAPI example port | `8000` |
+| `RUNTIME_NARRATIVE_RELOAD` | FastAPI example auto-reload | `1` |
+
+None of these are required just to import or use the library.
+
 ## Running tests
 
 ```bash
