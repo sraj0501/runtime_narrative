@@ -50,7 +50,7 @@ Repository = "https://github.com/sraj0501/runtime_narrative"
 
 [tool.setuptools]
 packages = ["runtime_narrative", "runtime_narrative.renderer", "runtime_narrative.analyzers"]
-`
+
 [dependency-groups]
 dev = [
     "build>=1.4.0",
