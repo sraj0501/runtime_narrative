@@ -1,11 +1,71 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import datetime
 from io import StringIO
 
 from runtime_narrative.events import FailureOccurred
-from runtime_narrative.renderer.json_renderer import JsonRenderer
+from runtime_narrative.renderer.json_renderer import JsonRenderer, RotatingJsonRenderer
+
+
+# ── T3: LLMAnalysisReady is serialised by JsonRenderer ───────────────────────
+
+def test_json_renderer_handles_llm_analysis_ready() -> None:
+    from runtime_narrative.events import LLMAnalysisReady
+
+    buf = StringIO()
+    r = JsonRenderer(output=buf)
+    event = LLMAnalysisReady(
+        story_id="sid",
+        story_name="My Story",
+        stage_name="Step",
+        llm_analysis="check line 47",
+        timestamp=datetime(2024, 6, 1, 12, 0, 0),
+    )
+    r.handle(event)
+    buf.seek(0)
+    data = json.loads(buf.read())
+    assert data["event"] == "LLMAnalysisReady"
+    assert data["story_id"] == "sid"
+    assert data["story_name"] == "My Story"
+    assert data["stage_name"] == "Step"
+    assert data["llm_analysis"] == "check line 47"
+    assert "timestamp" in data
+
+
+# ── RotatingJsonRenderer ──────────────────────────────────────────────────────
+
+def test_rotating_renderer_writes_events_to_file() -> None:
+    from runtime_narrative.events import StoryStarted
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "narrative.log")
+        r = RotatingJsonRenderer(path)
+        r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=datetime(2024, 1, 1)))
+        r._file.flush()
+        with open(path) as f:
+            data = json.loads(f.readline())
+        r._file.close()  # release handle before Windows deletes the temp dir
+
+    assert data["event"] == "StoryStarted"
+
+
+def test_rotating_renderer_rotates_when_size_exceeded() -> None:
+    from runtime_narrative.events import StoryStarted
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "narrative.log")
+        r = RotatingJsonRenderer(path, max_bytes=1, backup_count=2)
+        ts = datetime(2024, 1, 1)
+        r.handle(StoryStarted(story_id="s1", story_name="A", timestamp=ts))
+        r.handle(StoryStarted(story_id="s2", story_name="B", timestamp=ts))
+        r._file.flush()
+        rotated_exists = os.path.exists(path + ".1")
+        r._file.close()  # release handle before Windows deletes the temp dir
+
+    assert rotated_exists
 
 
 def test_json_renderer_failure_includes_diagnostics_fields() -> None:
