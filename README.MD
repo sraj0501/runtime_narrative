@@ -354,6 +354,85 @@ with story("Process Batch") as runtime:
 
 ---
 
+## Auto-instrumentation
+
+Instrument an entire class or module without touching every function individually.
+
+### `@narrative_class`
+
+Decorate a class and every public instance method becomes a stage automatically. The stage name is `ClassName.method_name`.
+
+```python
+from runtime_narrative import narrative_class, no_stage
+
+@narrative_class
+class OrderService:
+    def validate(self, order): ...      # → stage "OrderService.validate"
+    def charge(self, order): ...        # → stage "OrderService.charge"
+    def fulfill(self, order): ...       # → stage "OrderService.fulfill"
+
+    @no_stage
+    def _log(self, msg): ...            # excluded — opt-out marker
+```
+
+Equivalent to manually wrapping each method in `with stage("OrderService.validate")`. The decorator handles both sync and async methods; use `async with story(...)` to fully await async renderers.
+
+**What is skipped:** names starting with `_`, `@no_stage`-marked methods, `@staticmethod`, `@classmethod`, `@property`, and inherited methods (apply `@narrative_class` to the base class separately).
+
+### `@no_stage`
+
+Opt-out marker. Apply to any method or function to exclude it from auto-instrumentation:
+
+```python
+@no_stage
+def _internal_helper(self): ...
+```
+
+### `instrument_module()`
+
+Instrument all public callables in an existing module in one call. Classes get the full `@narrative_class` treatment; top-level functions are wrapped directly. Symbols imported from other modules are not touched.
+
+```python
+import runtime_narrative
+import myapp.services
+
+runtime_narrative.instrument_module(myapp.services)
+```
+
+Call this once at startup, after the module has been imported.
+
+### `auto_instrument()`
+
+Zero-config option. Register a `sys.meta_path` import hook that instruments every app module as it is imported — no changes to application code required:
+
+```python
+# Entry point (main.py or app factory) — one line:
+import runtime_narrative
+runtime_narrative.auto_instrument()
+
+# Everything imported from this point on is instrumented automatically:
+from myapp.services import OrderService
+from myapp.pipeline import run_pipeline
+```
+
+Only modules whose source file is under the current working directory (or `app_roots`) are instrumented — stdlib and installed packages are unaffected.
+
+```python
+# Pin to specific directories instead of cwd:
+runtime_narrative.auto_instrument(app_roots=["/app/src", "/app/workers"])
+```
+
+The hook is removable:
+
+```python
+finder = runtime_narrative.auto_instrument()
+# ... later ...
+import sys
+sys.meta_path.remove(finder)
+```
+
+---
+
 ## Decorators
 
 Wrap entire functions without changing their call sites. The library detects `async def` automatically:
