@@ -30,7 +30,9 @@ classifiers = [
     "Topic :: System :: Monitoring",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "python-dotenv>=1.2.1",
+]
 
 [project.optional-dependencies]
 # Colored terminal output via typer
