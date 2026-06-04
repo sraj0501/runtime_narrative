@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re
 import shutil
+import sys
 import textwrap
 
 try:
@@ -11,7 +12,26 @@ except ImportError:  # pragma: no cover
 from . import RenderProtocol
 
 
+def _stdout_supports_unicode() -> bool:
+    try:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        "▶✔❌".encode(enc)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
 class ConsoleRenderer:
+    def __init__(self) -> None:
+        if _stdout_supports_unicode():
+            self._glyph_arrow = "▶"
+            self._glyph_check = "✔"
+            self._glyph_cross = "❌"
+        else:
+            self._glyph_arrow = ">"
+            self._glyph_check = "[ok]"
+            self._glyph_cross = "[FAIL]"
+
     @property
     def _success_color(self):
         if typer:
@@ -51,12 +71,14 @@ class ConsoleRenderer:
     @staticmethod
     def _secho(text: str, *, fg=None, bold: bool = False, nl: bool = True) -> None:
         if typer is None:
-            if nl:
-                print(text)
-            else:
-                print(text, end="")
+            print(text, end="\n" if nl else "")
             return
-        typer.secho(text, fg=fg, bold=bold, nl=nl)
+        try:
+            typer.secho(text, fg=fg, bold=bold, nl=nl)
+        except UnicodeEncodeError:
+            enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+            safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+            typer.secho(safe, fg=fg, bold=bold, nl=nl)
 
     def _label(self, label: str, value: str, *, label_fg=None, value_fg=None) -> None:
         self._secho(f"{label} ", fg=label_fg, bold=True, nl=False)
@@ -137,17 +159,17 @@ class ConsoleRenderer:
         event_name = event.__class__.__name__
 
         if event_name == "StoryStarted":
-            self._secho("▶ Stage started: ", fg=self._success_color, bold=True, nl=False)
+            self._secho(f"{self._glyph_arrow} Story started: ", fg=self._success_color, bold=True, nl=False)
             self._secho(event.story_name, fg=self._success_value_color, bold=True)
             return
 
         if event_name == "StageStarted":
-            self._secho("▶ Stage started: ", fg=self._success_color, bold=True, nl=False)
+            self._secho(f"{self._glyph_arrow} Stage started: ", fg=self._success_color, bold=True, nl=False)
             self._secho(event.stage_name, fg=self._success_value_color)
             return
 
         if event_name == "StageCompleted":
-            self._secho("✔ Stage completed: ", fg=self._success_color, bold=True, nl=False)
+            self._secho(f"{self._glyph_check} Stage completed: ", fg=self._success_color, bold=True, nl=False)
             self._secho(
                 f"{event.stage_name} ({event.duration_seconds:.3f}s)",
                 fg=self._success_value_color,
@@ -155,7 +177,7 @@ class ConsoleRenderer:
             return
 
         if event_name == "FailureOccurred":
-            self._secho("\n❌ Failure detected", fg=self._failure_color, bold=True)
+            self._secho(f"\n{self._glyph_cross} Failure detected", fg=self._failure_color, bold=True)
             self._label("Story:", event.story_name, label_fg=self._failure_color, value_fg=self._failure_value_color)
             self._label("Stage:", event.stage_name, label_fg=self._failure_color, value_fg=self._failure_value_color)
             self._label(
@@ -232,7 +254,7 @@ class ConsoleRenderer:
                     heading_fg=self._failure_heading_color,
                 )
             self._label(
-                "Recent stages:",
+                "Stage timeline:",
                 event.stage_timeline,
                 label_fg=self._failure_color,
                 value_fg=self._failure_value_color,
@@ -260,7 +282,7 @@ class ConsoleRenderer:
             state = "SUCCESS" if event.success else "FAILED"
             color = self._success_color if event.success else self._failure_color
             value_color = self._success_value_color if event.success else self._failure_value_color
-            self._secho("▶ Story ended: ", fg=color, bold=True, nl=False)
+            self._secho(f"{self._glyph_arrow} Story ended: ", fg=color, bold=True, nl=False)
             self._secho(state, fg=value_color, bold=True)
 
 

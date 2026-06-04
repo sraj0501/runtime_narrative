@@ -36,10 +36,10 @@ def test_effective_diagnostics_mode_rich_allowed_in_production() -> None:
     assert effective_diagnostics_mode(cfg) == "rich"
 
 
-def test_effective_diagnostics_mode_invalid_mode_becomes_lean() -> None:
+def test_effective_diagnostics_mode_invalid_mode_raises() -> None:
     base = FailureDiagnosticsConfig()
-    cfg = dataclasses.replace(base, failure_diagnostics="bogus")  # type: ignore[misc]
-    assert effective_diagnostics_mode(cfg) == "lean"
+    with pytest.raises(ValueError, match="Invalid failure_diagnostics"):
+        dataclasses.replace(base, failure_diagnostics="bogus")  # type: ignore[misc]
 
 
 def test_merge_preserves_limits_and_overrides_flags() -> None:

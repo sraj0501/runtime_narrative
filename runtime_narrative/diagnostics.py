@@ -25,6 +25,9 @@ _DEFAULT_REDACT_SUBSTRINGS = (
 )
 
 
+_VALID_DIAGNOSTICS_MODES = frozenset({"lean", "rich"})
+
+
 @dataclass(frozen=True)
 class FailureDiagnosticsConfig:
     """Controls failure attachment depth (lean vs rich) and frame selection."""
@@ -33,6 +36,7 @@ class FailureDiagnosticsConfig:
     failure_diagnostics: str = "lean"
     allow_rich_in_production: bool = False
     app_roots: tuple[str, ...] = ()
+    redact_extra: tuple[str, ...] = ()
     max_traceback_chars: int | None = 12_000
     production_traceback_cap: int = 8_000
     max_locals_per_frame: int = 12
@@ -40,6 +44,13 @@ class FailureDiagnosticsConfig:
     max_local_depth: int = 2
     max_frames_with_locals: int = 2
     snippet_context_lines: int = 2
+
+    def __post_init__(self) -> None:
+        if self.failure_diagnostics not in _VALID_DIAGNOSTICS_MODES:
+            raise ValueError(
+                f"Invalid failure_diagnostics={self.failure_diagnostics!r}; "
+                f"must be one of {sorted(_VALID_DIAGNOSTICS_MODES)}"
+            )
 
     @classmethod
     def merge(
@@ -50,6 +61,7 @@ class FailureDiagnosticsConfig:
         failure_diagnostics: str | None = None,
         allow_rich_in_production: bool | None = None,
         app_roots: tuple[str, ...] | None = None,
+        redact_extra: tuple[str, ...] | None = None,
     ) -> FailureDiagnosticsConfig:
         return cls(
             runtime_environment=runtime_environment if runtime_environment is not None else base.runtime_environment,
@@ -58,6 +70,7 @@ class FailureDiagnosticsConfig:
                 allow_rich_in_production if allow_rich_in_production is not None else base.allow_rich_in_production
             ),
             app_roots=app_roots if app_roots is not None else base.app_roots,
+            redact_extra=redact_extra if redact_extra is not None else base.redact_extra,
             max_traceback_chars=base.max_traceback_chars,
             production_traceback_cap=base.production_traceback_cap,
             max_locals_per_frame=base.max_locals_per_frame,
@@ -146,7 +159,7 @@ def _truncate_tb(text: str, cap: int | None) -> tuple[str, bool]:
     return text[: cap - 20] + "\n... [traceback truncated]", True
 
 
-def _serialize_value(value: Any, *, max_len: int, depth: int, max_depth: int) -> str:
+def _serialize_value(value: Any, *, max_len: int, depth: int, max_depth: int, extra_redact: tuple[str, ...] = ()) -> str:
     if depth > max_depth:
         return "<max depth>"
     if value is None or isinstance(value, (bool, int, float)):
@@ -163,7 +176,10 @@ def _serialize_value(value: Any, *, max_len: int, depth: int, max_depth: int) ->
             return "[]" if isinstance(value, list) else "()"
         if depth >= max_depth:
             return f"<{type(value).__name__} len={len(value)}>"
-        inner = ", ".join(_serialize_value(v, max_len=max_len, depth=depth + 1, max_depth=max_depth) for v in value[:5])
+        inner = ", ".join(
+            _serialize_value(v, max_len=max_len, depth=depth + 1, max_depth=max_depth, extra_redact=extra_redact)
+            for v in value[:5]
+        )
         suffix = ", ..." if len(value) > 5 else ""
         bracket = "[]" if isinstance(value, list) else "()"
         return bracket[0] + inner + suffix + bracket[1]
@@ -174,13 +190,13 @@ def _serialize_value(value: Any, *, max_len: int, depth: int, max_depth: int) ->
             return f"<dict len={len(value)}>"
         parts: list[str] = []
         for k, v in list(value.items())[:5]:
-            key_repr = _serialize_value(k, max_len=40, depth=depth + 1, max_depth=max_depth)
-            if _should_redact_key(str(k)):
+            key_repr = _serialize_value(k, max_len=40, depth=depth + 1, max_depth=max_depth, extra_redact=extra_redact)
+            if _should_redact_key(str(k), extra=extra_redact):
                 parts.append(f"{key_repr}: <redacted>")
             else:
                 parts.append(
                     f"{key_repr}: "
-                    f"{_serialize_value(v, max_len=max_len, depth=depth + 1, max_depth=max_depth)}"
+                    f"{_serialize_value(v, max_len=max_len, depth=depth + 1, max_depth=max_depth, extra_redact=extra_redact)}"
                 )
         suffix = ", ..." if len(value) > 5 else ""
         return "{" + ", ".join(parts) + suffix + "}"
@@ -191,9 +207,9 @@ def _serialize_value(value: Any, *, max_len: int, depth: int, max_depth: int) ->
     return r if len(r) <= max_len else r[: max_len - 3] + "..."
 
 
-def _should_redact_key(name: str) -> bool:
+def _should_redact_key(name: str, *, extra: tuple[str, ...] = ()) -> bool:
     lower = name.lower()
-    return any(sub in lower for sub in _DEFAULT_REDACT_SUBSTRINGS)
+    return any(sub in lower for sub in _DEFAULT_REDACT_SUBSTRINGS + extra)
 
 
 def _capture_locals_mapping(
@@ -202,6 +218,7 @@ def _capture_locals_mapping(
     max_keys: int,
     max_len: int,
     max_depth: int,
+    extra_redact: tuple[str, ...] = (),
 ) -> tuple[dict[str, str], int]:
     redacted = 0
     out: dict[str, str] = {}
@@ -211,13 +228,13 @@ def _capture_locals_mapping(
             continue
         if count >= max_keys:
             break
-        if _should_redact_key(key):
+        if _should_redact_key(key, extra=extra_redact):
             out[key] = "<redacted>"
             redacted += 1
             count += 1
             continue
         try:
-            out[key] = _serialize_value(locals_map[key], max_len=max_len, depth=0, max_depth=max_depth)
+            out[key] = _serialize_value(locals_map[key], max_len=max_len, depth=0, max_depth=max_depth, extra_redact=extra_redact)
         except Exception:
             out[key] = f"<{type(locals_map[key]).__name__}>"
         count += 1
@@ -347,6 +364,7 @@ def build_enriched_failure(
                 max_keys=config.max_locals_per_frame,
                 max_len=config.max_local_value_len,
                 max_depth=config.max_local_depth,
+                extra_redact=config.redact_extra,
             )
             redaction_total += red
             meta = stack_frames[idx]
