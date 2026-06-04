@@ -6,9 +6,12 @@ Run:
     RUNTIME_NARRATIVE_MODEL=llama3 RUNTIME_NARRATIVE_ENDPOINT=http://localhost:8000/api/generate uv run python examples/basic_ollama.py
 """
 import os
+from dotenv import load_dotenv
 
 from runtime_narrative import OllamaFailureAnalyzer, runtime_narrative_stage, runtime_narrative_story
 
+
+load_dotenv(".env")
 _model = os.environ["RUNTIME_NARRATIVE_MODEL"]
 _endpoint = os.getenv("RUNTIME_NARRATIVE_ENDPOINT", "http://127.0.0.1:11434/api/generate")
 _analyzer = OllamaFailureAnalyzer(model=_model, endpoint=_endpoint)
@@ -37,4 +40,7 @@ def run() -> None:
     insert(rows)
 
 
-run()
+try:
+    run()
+except Exception:
+    pass

@@ -29,4 +29,7 @@ def run() -> None:
     insert(rows)
 
 
-run()
+try:
+    run()
+except Exception:
+    pass
