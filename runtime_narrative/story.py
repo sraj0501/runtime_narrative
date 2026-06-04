@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Sequence
@@ -23,25 +24,47 @@ class StoryRuntime:
     stages: list[StageRecord] = field(default_factory=list)
     renderers: Sequence[object] = field(default_factory=tuple)
     failed_stage_name: str | None = None
+    declared_total_stages: int | None = field(default=None, repr=False)
+
+    def set_total_stages(self, n: int) -> None:
+        self.declared_total_stages = n
 
     def emit(self, event: object) -> None:
         for renderer in self.renderers:
-            renderer.handle(event)
+            try:
+                renderer.handle(event)
+            except Exception as exc:
+                print(
+                    f"[runtime-narrative] renderer {renderer.__class__.__name__!r} "
+                    f"raised {exc.__class__.__name__} on {event.__class__.__name__}: {exc}",
+                    file=sys.stderr,
+                )
 
     async def emit_async(self, event: object) -> None:
         for renderer in self.renderers:
             handle = getattr(renderer, "handle", None)
-            if handle is not None:
+            if handle is None:
+                continue
+            try:
                 if inspect.iscoroutinefunction(handle):
                     await handle(event)
                 else:
                     handle(event)
+            except Exception as exc:
+                print(
+                    f"[runtime-narrative] renderer {renderer.__class__.__name__!r} "
+                    f"raised {exc.__class__.__name__} on {event.__class__.__name__}: {exc}",
+                    file=sys.stderr,
+                )
 
     def register_stage(self, stage: StageRecord) -> None:
         self.stages.append(stage)
 
     def on_stage_started(self, stage: StageRecord) -> None:
         self.emit(StageStarted(story_id=self.story_id, stage_name=stage.name, timestamp=datetime.now()))
+
+    async def on_stage_started_async(self, stage: StageRecord) -> None:
+        await self.emit_async(StageStarted(story_id=self.story_id, stage_name=stage.name, timestamp=datetime.now()))
 
     def on_stage_completed(self, stage: StageRecord) -> None:
         completed_at = datetime.now()
@@ -57,12 +80,26 @@ class StoryRuntime:
             )
         )
 
+    async def on_stage_completed_async(self, stage: StageRecord) -> None:
+        completed_at = datetime.now()
+        duration_seconds = stage.duration_seconds
+        if duration_seconds is None:
+            duration_seconds = (completed_at - stage.started_at).total_seconds()
+        await self.emit_async(
+            StageCompleted(
+                story_id=self.story_id,
+                stage_name=stage.name,
+                timestamp=completed_at,
+                duration_seconds=duration_seconds,
+            )
+        )
+
     def build_stage_timeline(self) -> str:
         if not self.stages:
             return "<no stages>"
 
         rendered: list[str] = []
-        for stage in self.stages[-5:]:
+        for stage in self.stages:
             if stage.completed:
                 duration = f"{stage.duration_seconds:.3f}s" if stage.duration_seconds is not None else "n/a"
                 rendered.append(f"{stage.name}=completed ({duration})")
@@ -79,13 +116,16 @@ class StoryRuntime:
 
     @property
     def total_stages(self) -> int:
+        if self.declared_total_stages is not None:
+            return self.declared_total_stages
         return len(self.stages)
 
     @property
     def progress_percent(self) -> int:
-        if not self.total_stages:
+        total = self.declared_total_stages if self.declared_total_stages is not None else len(self.stages)
+        if not total:
             return 0
-        return int((self.completed_stages / self.total_stages) * 100)
+        return int((self.completed_stages / total) * 100)
 
 
 def _optional_normalized_str(value: str | None) -> str | None:
@@ -108,10 +148,16 @@ class story:
         failure_diagnostics: str | None = None,
         allow_rich_in_production: bool | None = None,
         app_roots: Sequence[str] | None = None,
+        redact_extra: Sequence[str] | None = None,
+        total_stages: int | None = None,
     ):
         from .renderer.console import ConsoleRenderer
 
-        self.runtime = StoryRuntime(name=name, renderers=renderers or (ConsoleRenderer(),))
+        self.runtime = StoryRuntime(
+            name=name,
+            renderers=renderers or (ConsoleRenderer(),),
+            declared_total_stages=total_stages,
+        )
         self.failure_analyzer = failure_analyzer
         self.background_analysis = background_analysis
         if diagnostics_config is not None:
@@ -121,12 +167,16 @@ class story:
             roots: tuple[str, ...] | None = None
             if app_roots is not None:
                 roots = tuple(os.path.abspath(os.path.expanduser(str(p))) for p in app_roots)
+            extra: tuple[str, ...] | None = None
+            if redact_extra is not None:
+                extra = tuple(str(s).lower() for s in redact_extra)
             self._diag_config = FailureDiagnosticsConfig.merge(
                 base,
                 runtime_environment=_optional_normalized_str(runtime_environment),
                 failure_diagnostics=_optional_normalized_str(failure_diagnostics),
                 allow_rich_in_production=allow_rich_in_production,
                 app_roots=roots,
+                redact_extra=extra,
             )
         self._story_token = None
         self._stack_token = None

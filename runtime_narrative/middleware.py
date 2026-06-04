@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from typing import Any, Sequence
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,12 +11,25 @@ from .diagnostics import FailureDiagnosticsConfig
 from .story import story
 
 
+def _default_middleware_renderers() -> tuple:
+    """Return ConsoleRenderer when attached to a real terminal, JsonRenderer otherwise."""
+    if getattr(sys.stdout, "isatty", lambda: False)():
+        from .renderer.console import ConsoleRenderer
+        return (ConsoleRenderer(),)
+    from .renderer.json_renderer import JsonRenderer
+    return (JsonRenderer(),)
+
+
 class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
     """
     FastAPI/Starlette middleware that wraps every HTTP request in a runtime_narrative story.
 
     Each request gets a story named "<METHOD> <path>" (e.g. "POST /customers").
     The story context is available to all stages declared inside route handlers.
+
+    When no ``renderers`` are passed, the middleware auto-selects:
+    - ``ConsoleRenderer`` if ``sys.stdout`` is a real TTY (local dev server)
+    - ``JsonRenderer`` otherwise (production, Docker, CI — any non-interactive environment)
 
     Usage::
 
@@ -24,7 +38,7 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
 
         app.add_middleware(
             RuntimeNarrativeMiddleware,
-            renderers=[JsonRenderer()],   # optional, defaults to ConsoleRenderer
+            renderers=[JsonRenderer()],   # explicit override
             failure_analyzer=None,        # optional OllamaFailureAnalyzer
         )
 
@@ -50,15 +64,17 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         failure_diagnostics: str | None = None,
         allow_rich_in_production: bool | None = None,
         app_roots: Sequence[str] | None = None,
+        redact_extra: Sequence[str] | None = None,
     ):
         super().__init__(app)
-        self._renderers = renderers
+        self._renderers = tuple(renderers) if renderers is not None else _default_middleware_renderers()
         self._failure_analyzer = failure_analyzer
         self._diagnostics_config = diagnostics_config
         self._runtime_environment = runtime_environment
         self._failure_diagnostics = failure_diagnostics
         self._allow_rich_in_production = allow_rich_in_production
         self._app_roots = app_roots
+        self._redact_extra = redact_extra
 
     async def dispatch(self, request: Request, call_next) -> Response:
         story_name = f"{request.method} {request.url.path}"
@@ -71,6 +87,7 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
             failure_diagnostics=self._failure_diagnostics,
             allow_rich_in_production=self._allow_rich_in_production,
             app_roots=self._app_roots,
+            redact_extra=self._redact_extra,
         ):
             response = await call_next(request)
         return response

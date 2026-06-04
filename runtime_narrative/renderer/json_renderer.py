@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime
 from typing import IO
@@ -84,6 +85,16 @@ class JsonRenderer:
                 payload["traceback_text"] = event.traceback_text
             self._dump(payload)
 
+        elif event_name == "LLMAnalysisReady":
+            self._dump({
+                "event": "LLMAnalysisReady",
+                "story_id": event.story_id,
+                "story_name": event.story_name,
+                "stage_name": event.stage_name,
+                "llm_analysis": event.llm_analysis,
+                "timestamp": event.timestamp.isoformat(),
+            })
+
         elif event_name == "StoryCompleted":
             self._dump({
                 "event": "StoryCompleted",
@@ -99,4 +110,65 @@ class JsonRenderer:
             })
 
 
-__all__ = ["JsonRenderer"]
+class RotatingJsonRenderer(JsonRenderer):
+    """JsonRenderer that rotates the output file when it reaches a size limit.
+
+    Rotation follows the same naming convention as ``logging.handlers.RotatingFileHandler``:
+    the active log is ``path``; rotated logs are ``path.1``, ``path.2``, ... up to
+    ``backup_count``.  When the active file reaches ``max_bytes``, it is renamed to
+    ``path.1`` (shifting older files) and a new ``path`` is opened.
+
+    Args:
+        path: Destination file path.
+        max_bytes: Rotate when the file exceeds this size (bytes). 0 disables rotation.
+        backup_count: Number of rotated files to keep (oldest is deleted on overflow).
+        indent: Passed to ``json.dumps``; ``None`` produces compact single-line output.
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike,
+        *,
+        max_bytes: int = 10 * 1024 * 1024,
+        backup_count: int = 5,
+        indent: int | None = None,
+    ):
+        self._path = str(path)
+        self._max_bytes = max_bytes
+        self._backup_count = backup_count
+        self._file = open(self._path, "a", encoding="utf-8")
+        super().__init__(output=self._file, indent=indent)
+
+    def _should_rotate(self) -> bool:
+        if self._max_bytes <= 0:
+            return False
+        try:
+            return os.path.getsize(self._path) >= self._max_bytes
+        except OSError:
+            return False
+
+    def _do_rotate(self) -> None:
+        self._file.flush()
+        self._file.close()
+        for i in range(self._backup_count - 1, 0, -1):
+            src = f"{self._path}.{i}"
+            dst = f"{self._path}.{i + 1}"
+            if os.path.exists(src):
+                try:
+                    os.replace(src, dst)
+                except OSError:
+                    pass
+        try:
+            os.replace(self._path, f"{self._path}.1")
+        except OSError:
+            pass
+        self._file = open(self._path, "a", encoding="utf-8")
+        self._output = self._file
+
+    def _dump(self, data: dict) -> None:
+        if self._should_rotate():
+            self._do_rotate()
+        super()._dump(data)
+
+
+__all__ = ["JsonRenderer", "RotatingJsonRenderer"]
