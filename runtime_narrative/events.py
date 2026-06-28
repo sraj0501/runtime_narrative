@@ -17,6 +17,8 @@ class StageStarted:
     story_id: str
     stage_name: str
     timestamp: datetime
+    stage_index: int = 0
+    parent_stage_name: str | None = None
 
 
 @dataclass
@@ -25,6 +27,8 @@ class StageCompleted:
     stage_name: str
     timestamp: datetime
     duration_seconds: float
+    stage_index: int = 0
+    parent_stage_name: str | None = None
 
 
 @dataclass

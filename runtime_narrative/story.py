@@ -61,10 +61,22 @@ class StoryRuntime:
         self.stages.append(stage)
 
     def on_stage_started(self, stage: StageRecord) -> None:
-        self.emit(StageStarted(story_id=self.story_id, stage_name=stage.name, timestamp=datetime.now()))
+        self.emit(StageStarted(
+            story_id=self.story_id,
+            stage_name=stage.name,
+            timestamp=datetime.now(),
+            stage_index=stage.stage_index,
+            parent_stage_name=stage.parent_stage_name,
+        ))
 
     async def on_stage_started_async(self, stage: StageRecord) -> None:
-        await self.emit_async(StageStarted(story_id=self.story_id, stage_name=stage.name, timestamp=datetime.now()))
+        await self.emit_async(StageStarted(
+            story_id=self.story_id,
+            stage_name=stage.name,
+            timestamp=datetime.now(),
+            stage_index=stage.stage_index,
+            parent_stage_name=stage.parent_stage_name,
+        ))
 
     def on_stage_completed(self, stage: StageRecord) -> None:
         completed_at = datetime.now()
@@ -77,6 +89,8 @@ class StoryRuntime:
                 stage_name=stage.name,
                 timestamp=completed_at,
                 duration_seconds=duration_seconds,
+                stage_index=stage.stage_index,
+                parent_stage_name=stage.parent_stage_name,
             )
         )
 
@@ -91,6 +105,8 @@ class StoryRuntime:
                 stage_name=stage.name,
                 timestamp=completed_at,
                 duration_seconds=duration_seconds,
+                stage_index=stage.stage_index,
+                parent_stage_name=stage.parent_stage_name,
             )
         )
 
