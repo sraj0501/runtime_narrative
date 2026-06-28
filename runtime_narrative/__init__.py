@@ -19,6 +19,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from .renderer.prometheus_renderer import PrometheusRenderer
+except ImportError:
+    pass
+
 __all__ = [
     "story",
     "StoryRuntime",
@@ -36,6 +41,7 @@ __all__ = [
     "JsonRenderer",
     "RotatingJsonRenderer",
     "OtelRenderer",
+    "PrometheusRenderer",
     "LLMAnalysisReady",
     "FailureDiagnosticsConfig",
     "build_enriched_failure",
