@@ -223,3 +223,84 @@ def test_missing_opentelemetry_raises_on_init(monkeypatch) -> None:
     monkeypatch.setattr(mod, "_OTEL_AVAILABLE", False)
     with pytest.raises(ImportError, match="opentelemetry"):
         OtelRenderer()
+
+
+# ── exclude_stages filtering ──────────────────────────────────────────────────
+
+def test_excluded_stage_produces_no_span() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider, exclude_stages={"Internal"})
+
+    r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=_ts(0)))
+    r.handle(StageStarted(story_id="s1", stage_name="Internal", timestamp=_ts(1)))
+    r.handle(StageCompleted(story_id="s1", stage_name="Internal", timestamp=_ts(2), duration_seconds=1.0))
+    r.handle(StageStarted(story_id="s1", stage_name="Visible", timestamp=_ts(2)))
+    r.handle(StageCompleted(story_id="s1", stage_name="Visible", timestamp=_ts(3), duration_seconds=1.0))
+    r.handle(StoryCompleted(story_id="s1", story_name="S", success=True, progress_percent=100, completed_stages=2, total_stages=2, timestamp=_ts(4)))
+
+    spans = exporter.get_finished_spans()
+    span_names = {s.name for s in spans}
+    assert "Visible" in span_names
+    assert "Internal" not in span_names
+    assert "S" in span_names
+
+
+def test_excluded_stage_failure_does_not_crash() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider, exclude_stages={"Step"})
+
+    r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=_ts(0)))
+    r.handle(StageStarted(story_id="s1", stage_name="Step", timestamp=_ts(1)))
+    r.handle(_failure(stage_name="Step"))
+    r.handle(StoryCompleted(story_id="s1", story_name="S", success=False, progress_percent=0, completed_stages=0, total_stages=1, timestamp=_ts(2)))
+
+    spans = exporter.get_finished_spans()
+    root = next(s for s in spans if s.name == "S")
+    assert root.status.status_code.value == 2  # ERROR
+    stage_span = next((s for s in spans if s.name == "Step"), None)
+    assert stage_span is None
+
+
+# ── min_duration_ms filtering ─────────────────────────────────────────────────
+
+def test_short_stage_below_threshold_produces_no_span() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider, min_duration_ms=100.0)
+
+    r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=_ts(0)))
+    r.handle(StageStarted(story_id="s1", stage_name="Quick", timestamp=_ts(1)))
+    r.handle(StageCompleted(story_id="s1", stage_name="Quick", timestamp=_ts(2), duration_seconds=0.05))
+    r.handle(StoryCompleted(story_id="s1", story_name="S", success=True, progress_percent=100, completed_stages=1, total_stages=1, timestamp=_ts(2)))
+
+    spans = exporter.get_finished_spans()
+    span_names = {s.name for s in spans}
+    assert "Quick" not in span_names
+    assert "S" in span_names
+
+
+def test_long_stage_above_threshold_produces_span() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider, min_duration_ms=100.0)
+
+    r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=_ts(0)))
+    r.handle(StageStarted(story_id="s1", stage_name="Slow", timestamp=_ts(1)))
+    r.handle(StageCompleted(story_id="s1", stage_name="Slow", timestamp=_ts(3), duration_seconds=2.0))
+    r.handle(StoryCompleted(story_id="s1", story_name="S", success=True, progress_percent=100, completed_stages=1, total_stages=1, timestamp=_ts(3)))
+
+    spans = exporter.get_finished_spans()
+    span_names = {s.name for s in spans}
+    assert "Slow" in span_names
+
+
+def test_min_duration_zero_disables_filtering() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider, min_duration_ms=0.0)
+
+    r.handle(StoryStarted(story_id="s1", story_name="S", timestamp=_ts(0)))
+    r.handle(StageStarted(story_id="s1", stage_name="Instant", timestamp=_ts(1)))
+    r.handle(StageCompleted(story_id="s1", stage_name="Instant", timestamp=_ts(1), duration_seconds=0.0))
+    r.handle(StoryCompleted(story_id="s1", story_name="S", success=True, progress_percent=100, completed_stages=1, total_stages=1, timestamp=_ts(1)))
+
+    spans = exporter.get_finished_spans()
+    span_names = {s.name for s in spans}
+    assert "Instant" in span_names

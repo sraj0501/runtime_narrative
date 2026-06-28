@@ -31,6 +31,8 @@ class OtelRenderer:
         tracer_provider=None,
         tracer_name: str = "runtime_narrative",
         max_attribute_length: int = 8192,
+        min_duration_ms: float = 0.0,
+        exclude_stages: set[str] | frozenset[str] | None = None,
     ) -> None:
         if not _OTEL_AVAILABLE:
             raise ImportError(
@@ -40,6 +42,8 @@ class OtelRenderer:
         provider = tracer_provider or trace.get_tracer_provider()
         self._tracer = provider.get_tracer(tracer_name)
         self._max_attr = max_attribute_length
+        self._min_duration_ns = int(min_duration_ms * 1_000_000)
+        self._exclude_stages: frozenset[str] = frozenset(exclude_stages or ())
         # keyed by story_id
         self._story_spans: dict = {}
         # keyed by (story_id, stage_name)
@@ -64,6 +68,8 @@ class OtelRenderer:
             return
 
         if name == "StageStarted":
+            if event.stage_name in self._exclude_stages:
+                return
             story_span = self._story_spans.get(event.story_id)
             ctx = trace.set_span_in_context(story_span) if story_span else None
             key = (event.story_id, event.stage_name)
@@ -82,6 +88,10 @@ class OtelRenderer:
             key = (event.story_id, event.stage_name)
             span = self._stage_spans.pop(key, None)
             if span is not None:
+                duration_ns = int(event.duration_seconds * 1_000_000_000)
+                if self._min_duration_ns > 0 and duration_ns < self._min_duration_ns:
+                    # abandon span — never call end(), so it is never exported
+                    return
                 span.end(end_time=_to_ns(event.timestamp))
             return
 
