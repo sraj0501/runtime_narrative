@@ -10,6 +10,13 @@ from starlette.responses import Response
 from .diagnostics import FailureDiagnosticsConfig
 from .story import story
 
+try:
+    from opentelemetry import propagate as _otel_propagate
+    from opentelemetry import context as _otel_context
+    _OTEL_PROPAGATION_AVAILABLE = True
+except ImportError:
+    _OTEL_PROPAGATION_AVAILABLE = False
+
 
 def _default_middleware_renderers() -> tuple:
     """Return ConsoleRenderer when attached to a real terminal, JsonRenderer otherwise."""
@@ -65,6 +72,7 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         allow_rich_in_production: bool | None = None,
         app_roots: Sequence[str] | None = None,
         redact_extra: Sequence[str] | None = None,
+        propagate_trace_context: bool = True,
     ):
         super().__init__(app)
         self._renderers = tuple(renderers) if renderers is not None else _default_middleware_renderers()
@@ -75,22 +83,31 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         self._allow_rich_in_production = allow_rich_in_production
         self._app_roots = app_roots
         self._redact_extra = redact_extra
+        self._propagate_trace_context = propagate_trace_context
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        story_name = f"{request.method} {request.url.path}"
-        async with story(
-            story_name,
-            renderers=self._renderers,
-            failure_analyzer=self._failure_analyzer,
-            diagnostics_config=self._diagnostics_config,
-            runtime_environment=self._runtime_environment,
-            failure_diagnostics=self._failure_diagnostics,
-            allow_rich_in_production=self._allow_rich_in_production,
-            app_roots=self._app_roots,
-            redact_extra=self._redact_extra,
-        ):
-            response = await call_next(request)
-        return response
+        token = None
+        if _OTEL_PROPAGATION_AVAILABLE and self._propagate_trace_context:
+            ctx = _otel_propagate.extract(dict(request.headers))
+            token = _otel_context.attach(ctx)
+        try:
+            story_name = f"{request.method} {request.url.path}"
+            async with story(
+                story_name,
+                renderers=self._renderers,
+                failure_analyzer=self._failure_analyzer,
+                diagnostics_config=self._diagnostics_config,
+                runtime_environment=self._runtime_environment,
+                failure_diagnostics=self._failure_diagnostics,
+                allow_rich_in_production=self._allow_rich_in_production,
+                app_roots=self._app_roots,
+                redact_extra=self._redact_extra,
+            ):
+                response = await call_next(request)
+            return response
+        finally:
+            if token is not None:
+                _otel_context.detach(token)
 
 
 __all__ = ["RuntimeNarrativeMiddleware"]
