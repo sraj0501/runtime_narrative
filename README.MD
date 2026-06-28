@@ -38,7 +38,7 @@ pip install "runtime-narrative[all]"       # everything
 ## Quick start
 
 ```python
-from runtime_narrative import story, stage
+from runtime_narrative import story, stage, StoryRuntime  # StoryRuntime for type hints
 
 with story("Import Customers"):
     with stage("Load CSV"):
@@ -194,14 +194,30 @@ async with story(
     runtime_environment="development",
     failure_diagnostics="rich",
     app_roots=("/path/to/my/app",),   # optional; default uses cwd
+    redact_extra=("internal_id", "org_token"),  # extend built-in secret list
 ):
     ...
 
 # Or pass a fully built config
-cfg = FailureDiagnosticsConfig(failure_diagnostics="rich", app_roots=("/app",))
+cfg = FailureDiagnosticsConfig(
+    failure_diagnostics="rich",
+    app_roots=("/app",),
+    redact_extra=("internal_id",),
+)
 async with story("Import Customers", diagnostics_config=cfg):
     ...
 ```
+
+### Custom redaction
+
+Rich mode captures local variables at the failing frame and automatically redacts keys containing `password`, `secret`, `token`, `api_key`, `authorization`, `cookie`, `session`, and `credential`. Pass `redact_extra` to extend this list with project-specific names:
+
+```python
+async with story("Sync Users", failure_diagnostics="rich", redact_extra=("org_id", "internal_key")):
+    ...
+```
+
+The same kwarg is accepted by `RuntimeNarrativeMiddleware` and `FailureDiagnosticsConfig`.
 
 ---
 
@@ -250,6 +266,27 @@ Write to a file instead of stdout:
 JsonRenderer(output=open("narrative.log", "a"))
 ```
 
+### Rotating log files
+
+Use `RotatingJsonRenderer` to cap log file size automatically. When the active file reaches `max_bytes` it is renamed to `narrative.log.1` (shifting older backups) and a new file is opened — no external dependencies, no cron job required:
+
+```python
+from runtime_narrative import story, stage, RotatingJsonRenderer
+
+async with story("Process Payment", renderers=[RotatingJsonRenderer("narrative.log")]):
+    async with stage("Charge"):
+        ...
+```
+
+```python
+RotatingJsonRenderer(
+    "narrative.log",
+    max_bytes=10 * 1024 * 1024,  # rotate at 10 MB (default)
+    backup_count=5,               # keep narrative.log.1 … narrative.log.5 (default)
+    indent=None,                  # compact single-line output (default)
+)
+```
+
 ---
 
 ## FastAPI / Starlette middleware
@@ -281,6 +318,119 @@ async def create_order(payload: OrderIn):
 
 Each request becomes a story named `"POST /orders"`. If the handler raises, the middleware captures the full failure context before returning the error response.
 
+When no `renderers` are provided, the middleware auto-selects: `ConsoleRenderer` when `sys.stdout` is a real TTY (local `uvicorn` dev server), `JsonRenderer` otherwise (Docker, CI, any non-interactive environment).
+
+### Progress tracking
+
+Declare the expected stage count upfront so `progress_percent` is accurate at every stage boundary — not just at story end:
+
+```python
+from runtime_narrative import story, stage, StoryRuntime
+
+with story("Import Customers", total_stages=3) as runtime:
+    with stage("Load CSV"):
+        rows = load_csv("customers.csv")
+    # progress_percent is now 33%
+
+    with stage("Validate Data"):
+        validate(rows)
+    # progress_percent is now 66%
+
+    with stage("Insert Records"):
+        db.insert(rows)
+    # progress_percent is now 100%
+```
+
+You can also set the count dynamically after the story starts:
+
+```python
+with story("Process Batch") as runtime:
+    items = fetch_items()
+    runtime.set_total_stages(len(items))
+    for item in items:
+        with stage(f"Process {item.id}"):
+            process(item)
+```
+
+---
+
+## Auto-instrumentation
+
+Instrument an entire class or module without touching every function individually.
+
+### `@narrative_class`
+
+Decorate a class and every public instance method becomes a stage automatically. The stage name is `ClassName.method_name`.
+
+```python
+from runtime_narrative import narrative_class, no_stage
+
+@narrative_class
+class OrderService:
+    def validate(self, order): ...      # → stage "OrderService.validate"
+    def charge(self, order): ...        # → stage "OrderService.charge"
+    def fulfill(self, order): ...       # → stage "OrderService.fulfill"
+
+    @no_stage
+    def _log(self, msg): ...            # excluded — opt-out marker
+```
+
+Equivalent to manually wrapping each method in `with stage("OrderService.validate")`. The decorator handles both sync and async methods; use `async with story(...)` to fully await async renderers.
+
+**What is skipped:** names starting with `_`, `@no_stage`-marked methods, `@staticmethod`, `@classmethod`, `@property`, and inherited methods (apply `@narrative_class` to the base class separately).
+
+### `@no_stage`
+
+Opt-out marker. Apply to any method or function to exclude it from auto-instrumentation:
+
+```python
+@no_stage
+def _internal_helper(self): ...
+```
+
+### `instrument_module()`
+
+Instrument all public callables in an existing module in one call. Classes get the full `@narrative_class` treatment; top-level functions are wrapped directly. Symbols imported from other modules are not touched.
+
+```python
+import runtime_narrative
+import myapp.services
+
+runtime_narrative.instrument_module(myapp.services)
+```
+
+Call this once at startup, after the module has been imported.
+
+### `auto_instrument()`
+
+Zero-config option. Register a `sys.meta_path` import hook that instruments every app module as it is imported — no changes to application code required:
+
+```python
+# Entry point (main.py or app factory) — one line:
+import runtime_narrative
+runtime_narrative.auto_instrument()
+
+# Everything imported from this point on is instrumented automatically:
+from myapp.services import OrderService
+from myapp.pipeline import run_pipeline
+```
+
+Only modules whose source file is under the current working directory (or `app_roots`) are instrumented — stdlib and installed packages are unaffected.
+
+```python
+# Pin to specific directories instead of cwd:
+runtime_narrative.auto_instrument(app_roots=["/app/src", "/app/workers"])
+```
+
+The hook is removable:
+
+```python
+finder = runtime_narrative.auto_instrument()
+# ... later ...
+import sys
+sys.meta_path.remove(finder)
+```
+
 ---
 
 ## Decorators
@@ -307,7 +457,7 @@ All `story()` kwargs — `failure_analyzer`, `failure_diagnostics`, `runtime_env
 
 ## Custom renderer
 
-Any object with a `handle(event)` method is a valid renderer. Async renderers (`async def handle`) are awaited automatically inside `async with story(...)`:
+Any object with a `handle(event)` method is a valid renderer. Async renderers (`async def handle`) are awaited automatically inside `async with story(...)`, including for `StageStarted` and `StageCompleted` events:
 
 ```python
 class SlackRenderer:
@@ -352,7 +502,7 @@ async with story("Import", failure_analyzer=MyAnalyzer()):
 | Variable | Values | Default | Effect |
 |---|---|---|---|
 | `RUNTIME_NARRATIVE_ENV` | `development`, `production` | `development` | Production caps traceback length and forces lean mode |
-| `RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS` | `lean`, `rich` | `lean` | `rich` captures local variables at the failing frames |
+| `RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS` | `lean`, `rich` | `lean` | `rich` captures local variables at the failing frames. Invalid values raise `ValueError` at story construction. |
 | `RUNTIME_NARRATIVE_ALLOW_RICH_IN_PRODUCTION` | `1`, `true` | off | Bypass production safeguard for rich diagnostics |
 
 ---

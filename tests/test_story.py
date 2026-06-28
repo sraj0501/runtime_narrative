@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 
 import pytest
 
 from runtime_narrative import stage, story
 from runtime_narrative.events import FailureOccurred, StoryCompleted, StoryStarted
+from runtime_narrative.story import StoryRuntime
 
 from tests.conftest import AsyncCapturingRenderer, CapturingRenderer
 
@@ -93,6 +95,91 @@ def test_async_story_failure_enriched_async_path() -> None:
     assert fail.stack_frames
     assert fail.primary_frame_reason in ("innermost_app", "leaf", "innermost_non_stdlib")
 
+
+# ── T2: Renderer exception isolation ─────────────────────────────────────────
+
+def test_emit_renderer_exception_does_not_propagate(capsys) -> None:
+    class BoomRenderer:
+        def handle(self, event: object) -> None:
+            raise RuntimeError("boom")
+
+    cap = CapturingRenderer()
+    runtime = StoryRuntime(name="S", renderers=[BoomRenderer(), cap])
+    runtime.emit(StoryStarted(story_id="x", story_name="S", timestamp=datetime.now()))
+
+    assert len(cap.events) == 1
+    err = capsys.readouterr().err
+    assert "BoomRenderer" in err
+    assert "RuntimeError" in err
+
+
+def test_emit_async_renderer_exception_does_not_propagate(capsys) -> None:
+    class AsyncBoomRenderer:
+        async def handle(self, event: object) -> None:
+            raise ValueError("async boom")
+
+    cap = AsyncCapturingRenderer()
+    runtime = StoryRuntime(name="S", renderers=[AsyncBoomRenderer(), cap])
+    asyncio.run(runtime.emit_async(StoryStarted(story_id="x", story_name="S", timestamp=datetime.now())))
+
+    assert len(cap.events) == 1
+    err = capsys.readouterr().err
+    assert "AsyncBoomRenderer" in err
+
+
+# ── T10: Nested stories have independent ContextVar contexts ──────────────────
+
+def test_nested_stories_inner_renderer_sees_only_inner_stages() -> None:
+    outer_cap = CapturingRenderer()
+    inner_cap = CapturingRenderer()
+
+    with story("Outer", renderers=[outer_cap]):
+        with stage("Before"):
+            pass
+        with story("Inner", renderers=[inner_cap]):
+            with stage("Inner Step"):
+                pass
+        with stage("After"):
+            pass
+
+    inner_stage_names = [e.stage_name for e in inner_cap.events if hasattr(e, "stage_name")]
+    assert "Inner Step" in inner_stage_names
+    assert "Before" not in inner_stage_names
+    assert "After" not in inner_stage_names
+
+
+def test_nested_stories_outer_does_not_see_inner_stages() -> None:
+    outer_cap = CapturingRenderer()
+    inner_cap = CapturingRenderer()
+
+    with story("Outer", renderers=[outer_cap]):
+        with stage("Outer Step"):
+            pass
+        with story("Inner", renderers=[inner_cap]):
+            with stage("Inner Step"):
+                pass
+
+    outer_stage_names = [e.stage_name for e in outer_cap.events if hasattr(e, "stage_name")]
+    assert "Outer Step" in outer_stage_names
+    assert "Inner Step" not in outer_stage_names
+
+
+def test_nested_stories_context_restores_after_inner_exits() -> None:
+    """After inner story exits, the outer story's context must be active again."""
+    outer_cap = CapturingRenderer()
+
+    with story("Outer", renderers=[outer_cap]) as outer_runtime:
+        with story("Inner", renderers=[CapturingRenderer()]):
+            pass
+        # Stage registered after inner story exits must appear in outer timeline
+        with stage("Post-inner Stage"):
+            pass
+
+    timeline = outer_runtime.build_stage_timeline()
+    assert "Post-inner Stage" in timeline
+
+
+# ── (existing test follows) ───────────────────────────────────────────────────
 
 def test_background_analysis_emits_llm_ready() -> None:
     class QuickAnalyzer:

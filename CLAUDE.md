@@ -32,6 +32,11 @@ uv run python examples/basic.py
 uv run python examples/success.py
 uv run python examples/basic_ollama.py  # requires RUNTIME_NARRATIVE_MODEL
 
+# Auto-instrumentation examples (Phase 1)
+uv run python examples/narrative_class.py
+uv run python examples/instrument_module.py
+uv run python examples/auto_instrument.py
+
 # Run FastAPI demo
 uv run python -m examples.fastapi_app.run
 # With Ollama failure analysis:

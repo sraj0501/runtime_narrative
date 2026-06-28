@@ -6,11 +6,14 @@ import os
 
 import pytest
 
+from runtime_narrative import stage, story
 from runtime_narrative.diagnostics import (
     FailureDiagnosticsConfig,
     build_enriched_failure,
     effective_diagnostics_mode,
 )
+from runtime_narrative.events import FailureOccurred
+from tests.conftest import CapturingRenderer
 
 
 def test_effective_diagnostics_mode_rich_in_dev() -> None:
@@ -186,6 +189,51 @@ def test_max_traceback_chars_non_production() -> None:
 
     assert enriched.traceback_truncated is True
     assert len(enriched.summary.traceback_text) <= 450
+
+
+# ── T5: Deep exception chain (> 5 levels) doesn't crash ──────────────────────
+
+def test_deep_exception_chain_does_not_blow_up() -> None:
+    """Chains deeper than the 5-level cap in _build_exception_chain must not raise."""
+    cfg = FailureDiagnosticsConfig()
+
+    def raise_chain(depth: int) -> None:
+        if depth == 0:
+            raise ValueError("root cause")
+        try:
+            raise_chain(depth - 1)
+        except Exception as inner:
+            raise RuntimeError(f"level {depth}") from inner
+
+    try:
+        raise_chain(8)
+    except RuntimeError as e:
+        enriched = build_enriched_failure(type(e), e, e.__traceback__, config=cfg)
+
+    assert enriched.summary.error_type == "RuntimeError"
+    assert enriched.summary.exception_chain  # non-empty string
+    # Chain is truncated to 5 but must contain at least the outermost error
+    assert "RuntimeError" in enriched.summary.exception_chain
+
+
+# ── T6: story(app_roots=...) threads correctly to primary frame classifier ────
+
+def test_story_app_roots_kwarg_classifies_caller_as_innermost_app() -> None:
+    cap = CapturingRenderer()
+    tests_dir = os.path.abspath(os.path.dirname(__file__))
+
+    def raise_via_stdlib() -> None:
+        json.loads("invalid {{{")
+
+    with pytest.raises(json.JSONDecodeError):
+        with story("S", renderers=[cap], app_roots=(tests_dir,)):
+            with stage("Parse"):
+                raise_via_stdlib()
+
+    fail = next(e for e in cap.events if isinstance(e, FailureOccurred))
+    assert fail.primary_frame_reason == "innermost_app"
+    kinds = [f["kind"] for f in fail.stack_frames]
+    assert "app" in kinds
 
 
 def test_compressed_stack_summary_counts_app_frames() -> None:
