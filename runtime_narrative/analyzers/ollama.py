@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Optional
@@ -9,6 +10,31 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ..failure import FailureSummary
+
+
+_SECTION_LABELS = {
+    "exact_why": "Exact Why",
+    "evidence": "Evidence",
+    "targeted_fix": "Targeted Fix",
+    "code_changes": "Code Changes",
+}
+
+
+def _parse_structured_response(text: str) -> str:
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    json_text = fence_match.group(1) if fence_match else text
+    try:
+        data = json.loads(json_text)
+    except Exception:
+        return text
+    sections = [
+        f"## {label}\n{data[key]}"
+        for key, label in _SECTION_LABELS.items()
+        if key in data
+    ]
+    if not sections:
+        return text
+    return "\n\n".join(sections)
 
 
 def _build_prompt(
@@ -19,24 +45,20 @@ def _build_prompt(
     stage_timeline: str,
     progress_percent: int,
     include_traceback_lines: int,
+    max_context_chars: int,
 ) -> str:
-    traceback_lines = failure.traceback_text.strip().splitlines()
-    traceback_excerpt = "\n".join(traceback_lines[-include_traceback_lines:])
-    return (
+    instruction = (
         "You are debugging a Python runtime stage failure.\n"
-        "Return concise markdown with exactly four sections:\n"
-        "1) Exact Why\n"
-        "2) Evidence\n"
-        "3) Targeted Fix\n\n"
-        "4) Code Changes\n\n"
+        "Respond with a single JSON object with exactly these four keys:\n"
+        "  \"exact_why\"    — the exact mechanism that caused the failure (specific, not generic)\n"
+        "  \"evidence\"     — specific evidence from the traceback and code that proves the cause\n"
+        "  \"targeted_fix\" — the minimal change that fixes the issue\n"
+        "  \"code_changes\" — edit-ready snippets with file path, old line, new line when possible\n"
         "Constraints:\n"
-        "- Do not be generic.\n"
-        "- Point to the exact failing statement and mechanism.\n"
-        "- Mention assumptions only if uncertain.\n\n"
-        "Code Changes format:\n"
-        "- Provide minimal edit-ready snippets.\n"
-        "- Include file path, old line, and new line when possible.\n"
-        "- Prefer small targeted diffs over full-file rewrites.\n\n"
+        "- Do not be generic. Point to the exact failing statement and mechanism.\n"
+        "- Return ONLY valid JSON — no markdown fences, no extra text.\n\n"
+    )
+    context_fields = (
         f"Story: {story_name}\n"
         f"Stage: {stage_name}\n"
         f"Error Type: {failure.error_type}\n"
@@ -47,8 +69,31 @@ def _build_prompt(
         f"Progress: {progress_percent}%\n"
         f"Recent Stages: {stage_timeline}\n\n"
         "Traceback Excerpt:\n"
-        f"{traceback_excerpt}\n"
     )
+    fixed_overhead = instruction + context_fields
+    available = max_context_chars - len(fixed_overhead) - 200
+
+    traceback_lines = failure.traceback_text.strip().splitlines()
+    traceback_lines = traceback_lines[-include_traceback_lines:]
+
+    if available <= 0:
+        traceback_excerpt = "<traceback omitted — context budget exceeded>"
+    else:
+        full_traceback = "\n".join(traceback_lines)
+        if len(full_traceback) > available:
+            trimmed: list[str] = []
+            char_count = 0
+            for line in reversed(traceback_lines):
+                line_len = len(line) + 1
+                if char_count + line_len > available:
+                    break
+                trimmed.insert(0, line)
+                char_count += line_len
+            traceback_excerpt = "\n".join(trimmed)
+        else:
+            traceback_excerpt = full_traceback
+
+    return fixed_overhead + traceback_excerpt + "\n"
 
 
 @dataclass
@@ -71,6 +116,7 @@ class LLMFailureAnalyzer:
     endpoint: str
     timeout_seconds: float = 12.0
     include_traceback_lines: int = 30
+    max_context_chars: int = 8000
 
     def analyze_failure(
         self,
@@ -88,6 +134,7 @@ class LLMFailureAnalyzer:
             stage_timeline=stage_timeline,
             progress_percent=progress_percent,
             include_traceback_lines=self.include_traceback_lines,
+            max_context_chars=self.max_context_chars,
         )
         payload = {
             "model": self.model,
@@ -113,8 +160,7 @@ class LLMFailureAnalyzer:
         except Exception:
             return None
 
-        return text or None
-
+        return _parse_structured_response(text) or None
 
     async def analyze_failure_async(
         self,
@@ -156,6 +202,7 @@ class OllamaFailureAnalyzer:
     endpoint: str = "http://127.0.0.1:11434/api/generate"
     timeout_seconds: float = 12.0
     include_traceback_lines: int = 30
+    max_context_chars: int = 8000
 
     def analyze_failure(
         self,
@@ -173,6 +220,7 @@ class OllamaFailureAnalyzer:
             stage_timeline=stage_timeline,
             progress_percent=progress_percent,
             include_traceback_lines=self.include_traceback_lines,
+            max_context_chars=self.max_context_chars,
         )
         payload = {
             "model": self.model,
@@ -198,7 +246,7 @@ class OllamaFailureAnalyzer:
         except Exception:
             return None
 
-        return text or None
+        return _parse_structured_response(text) or None
 
     async def analyze_failure_async(
         self,
