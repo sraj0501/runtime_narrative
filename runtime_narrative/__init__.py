@@ -1,4 +1,4 @@
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from .analyzers import LLMFailureAnalyzer, OllamaFailureAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
@@ -16,6 +16,16 @@ except ImportError:
 
 try:
     from .renderer.otel_renderer import OtelRenderer
+except ImportError:
+    pass
+
+try:
+    from .renderer.otel_log_renderer import OtelLogRenderer
+except ImportError:
+    pass
+
+try:
+    from .renderer.otel_metrics_renderer import OtelMetricsRenderer
 except ImportError:
     pass
 
@@ -41,6 +51,8 @@ __all__ = [
     "JsonRenderer",
     "RotatingJsonRenderer",
     "OtelRenderer",
+    "OtelLogRenderer",
+    "OtelMetricsRenderer",
     "PrometheusRenderer",
     "LLMAnalysisReady",
     "FailureDiagnosticsConfig",
