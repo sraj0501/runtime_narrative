@@ -4,6 +4,26 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 0.6.0 — 2026-06-29
+
+### Added
+- **`OtelLogRenderer`** — emits all 6 lifecycle events as OpenTelemetry log records via `opentelemetry._logs` API (`[otel]` extra required).
+  - `StoryStarted` / `StoryCompleted` / `LLMAnalysisReady` → `INFO` severity.
+  - `StageStarted` / `StageCompleted` → `DEBUG` severity.
+  - `FailureOccurred` → `ERROR` severity with full diagnostics attributes: `error.type`, `error.message`, `code.filepath`, `code.lineno`, `code.function`, `narrative.exception_chain`, `narrative.exact_cause`, `error.stack_trace`.
+  - Automatically correlates `trace_id` / `span_id` from the ambient OTel context so log records link to co-existing spans.
+  - Accepts `logger_provider` and `logger_name` constructor kwargs for test/multi-tenant isolation.
+- **`OtelMetricsRenderer`** — emits four OTel instruments via `opentelemetry.metrics` API (`[otel]` extra required).
+  - `narrative.stage.duration` (Histogram, unit `s`, labels `story_name` + `stage_name`).
+  - `narrative.story.duration` (Histogram, unit `s`, labels `story_name` + `success`).
+  - `narrative.story.failures` (Counter, unit `1`, labels `story_name` + `error_type`).
+  - `narrative.llm.analysis_latency` (Histogram, unit `s`, label `story_name`) — time from `FailureOccurred` to `LLMAnalysisReady`.
+  - Accepts `meter_provider` and `meter_name` for isolation.
+- **W3C traceparent propagation in `RuntimeNarrativeMiddleware`** — extracts incoming `traceparent` / `tracestate` headers via `opentelemetry.propagate.extract()` and attaches the extracted context before entering each request's story. This makes `OtelRenderer` story spans children of the upstream trace rather than orphaned roots. Automatically enabled when `opentelemetry-api` is installed; silently no-ops otherwise.
+  - `propagate_trace_context: bool = True` — set to `False` to disable propagation while keeping OTel installed.
+
+---
+
 ## 0.5.0 — 2026-06-29
 
 ### Added

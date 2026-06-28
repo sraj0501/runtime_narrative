@@ -322,6 +322,8 @@ Each request becomes a story named `"POST /orders"`. If the handler raises, the 
 
 When no `renderers` are provided, the middleware auto-selects: `ConsoleRenderer` when `sys.stdout` is a real TTY (local `uvicorn` dev server), `JsonRenderer` otherwise (Docker, CI, any non-interactive environment).
 
+When `opentelemetry-api` is installed, the middleware automatically extracts incoming W3C `traceparent` / `tracestate` headers and attaches the upstream trace context before entering the story. This means `OtelRenderer` story spans become children of the upstream trace — not orphaned roots — so distributed traces are connected end-to-end. Pass `propagate_trace_context=False` to disable this behavior.
+
 ### Progress tracking
 
 Declare the expected stage count upfront so `progress_percent` is accurate at every stage boundary — not just at story end:
@@ -551,6 +553,62 @@ OtelRenderer(
 ```
 
 `exclude_stages` stages that fail still mark the root span `ERROR` — only the child span is suppressed. `min_duration_ms` stages that fail are not filtered (failures always produce a span).
+
+### OTel log renderer
+
+`OtelLogRenderer` emits all 6 lifecycle events as OpenTelemetry log records via the `opentelemetry._logs` API. Combine it with `OtelRenderer` to get both traces and logs in your observability backend:
+
+```python
+from runtime_narrative import story, stage, OtelRenderer, OtelLogRenderer
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+
+log_provider = LoggerProvider()
+log_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+
+async with story("Process Order", renderers=[
+    OtelRenderer(tracer_provider=trace_provider),
+    OtelLogRenderer(logger_provider=log_provider),
+]):
+    async with stage("Validate"):
+        ...
+```
+
+| Event | OTel severity |
+|---|---|
+| `StoryStarted`, `StoryCompleted`, `LLMAnalysisReady` | `INFO` |
+| `StageStarted`, `StageCompleted` | `DEBUG` |
+| `FailureOccurred` | `ERROR` with `error.type`, `error.message`, `code.filepath`, `code.lineno`, `code.function`, `error.stack_trace`, `narrative.exception_chain` attributes |
+
+Log records are automatically correlated with the ambient OTel span context (`trace_id` / `span_id`) so logs link to their enclosing traces in your backend.
+
+### OTel metrics renderer
+
+`OtelMetricsRenderer` emits four instruments via the OpenTelemetry Metrics API:
+
+```python
+from runtime_narrative import story, stage, OtelMetricsRenderer
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+
+reader = PeriodicExportingMetricReader(OTLPMetricExporter(), export_interval_millis=60_000)
+meter_provider = MeterProvider(metric_readers=[reader])
+
+async with story("Nightly Batch", renderers=[OtelMetricsRenderer(meter_provider=meter_provider)]):
+    async with stage("Load"):
+        ...
+```
+
+| Instrument | Type | Labels |
+|---|---|---|
+| `narrative.stage.duration` | Histogram (unit `s`) | `story_name`, `stage_name` |
+| `narrative.story.duration` | Histogram (unit `s`) | `story_name`, `success` (`"true"` / `"false"`) |
+| `narrative.story.failures` | Counter | `story_name`, `error_type` |
+| `narrative.llm.analysis_latency` | Histogram (unit `s`) | `story_name` |
+
+`narrative.llm.analysis_latency` measures the time between `FailureOccurred` and `LLMAnalysisReady` — only recorded when background LLM analysis is enabled.
 
 ---
 
