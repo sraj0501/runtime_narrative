@@ -14,6 +14,8 @@ class StageRecord:
     duration_seconds: float | None = None
     completed: bool = False
     failed: bool = False
+    stage_index: int = 0
+    parent_stage_name: str | None = None
 
 
 class stage:
@@ -26,8 +28,10 @@ class stage:
         if story_runtime is None:
             raise RuntimeError("stage() must run inside an active story() context")
 
-        story_runtime.register_stage(self.record)
         stack = list(current_stage_stack.get())
+        self.record.parent_stage_name = stack[-1].name if stack else None
+        story_runtime.register_stage(self.record)
+        self.record.stage_index = len(story_runtime.stages) - 1
         stack.append(self.record)
         current_stage_stack.set(stack)
         story_runtime.on_stage_started(self.record)
@@ -37,8 +41,11 @@ class stage:
         story_runtime = current_story.get()
         if story_runtime is None:
             raise RuntimeError("stage() must run inside an active story() context")
-        story_runtime.register_stage(self.record)
+
         stack = list(current_stage_stack.get())
+        self.record.parent_stage_name = stack[-1].name if stack else None
+        story_runtime.register_stage(self.record)
+        self.record.stage_index = len(story_runtime.stages) - 1
         stack.append(self.record)
         current_stage_stack.set(stack)
         await story_runtime.on_stage_started_async(self.record)
