@@ -4,6 +4,26 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 0.7.0 — 2026-06-29
+
+### Added
+- **`FailureAnalyzer` protocol** (`runtime_narrative.analyzers.base`) — `@runtime_checkable` `typing.Protocol` defining the required `analyze_failure(*)` signature. All existing analyzers satisfy it structurally with no code changes required.
+- **`AnthropicFailureAnalyzer`** — failure analyzer backed by Anthropic's API (`[anthropic]` extra required; `anthropic>=0.25.0`).
+  - Defaults to `claude-haiku-4-5-20251001`; override via `model=` or `RUNTIME_NARRATIVE_MODEL` env var.
+  - API key read from `ANTHROPIC_API_KEY`; override via `api_key=`.
+  - `analyze_failure()` uses the sync `anthropic.Anthropic` client; `analyze_failure_async()` uses `anthropic.AsyncAnthropic` for non-blocking execution.
+  - Both parse the model's JSON response into formatted `## Exact Why / ## Evidence / ## Targeted Fix / ## Code Changes` sections with graceful fallback to raw text.
+- **`DeduplicatingAnalyzer`** — wrapper that caches LLM suggestions by a SHA-256 hash of `(error_type, filename, lineno, exception_chain)`.
+  - `DeduplicatingAnalyzer(inner, max_cache_size=256)` wraps any existing analyzer.
+  - LRU eviction when cache reaches `max_cache_size`.
+  - `None` results (network errors, timeouts) are never cached — next call retries the model.
+  - Thread-safe; async path delegates to `inner.analyze_failure_async()` if available, otherwise uses `asyncio.to_thread`.
+- **Structured LLM output** — `LLMFailureAnalyzer` and `OllamaFailureAnalyzer` now request structured JSON (`exact_why`, `evidence`, `targeted_fix`, `code_changes`) instead of free-text markdown. Responses are parsed and reformatted into guaranteed `## Header\ncontent` sections. Gracefully falls back to raw text if the model returns non-JSON.
+- **Context budget management** — `LLMFailureAnalyzer` and `OllamaFailureAnalyzer` now accept `max_context_chars: int = 8000`. Traceback excerpts are trimmed from the top (keeping the most recent frames) when the prompt would exceed the budget. If the budget is exhausted before any traceback fits, a `<traceback omitted>` marker is used instead.
+- **`[anthropic]` optional extra** — `anthropic>=0.25.0`.
+
+---
+
 ## 0.6.0 — 2026-06-29
 
 ### Added

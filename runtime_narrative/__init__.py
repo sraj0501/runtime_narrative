@@ -1,6 +1,6 @@
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
-from .analyzers import LLMFailureAnalyzer, OllamaFailureAnalyzer
+from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
 from .diagnostics import FailureDiagnosticsConfig, build_enriched_failure, effective_diagnostics_mode
 from .events import LLMAnalysisReady
@@ -34,6 +34,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from .analyzers.anthropic import AnthropicFailureAnalyzer
+except ImportError:
+    pass
+
 __all__ = [
     "story",
     "StoryRuntime",
@@ -45,8 +50,11 @@ __all__ = [
     "no_stage",
     "instrument_module",
     "auto_instrument",
+    "FailureAnalyzer",
     "LLMFailureAnalyzer",
     "OllamaFailureAnalyzer",
+    "AnthropicFailureAnalyzer",
+    "DeduplicatingAnalyzer",
     "RuntimeNarrativeMiddleware",
     "JsonRenderer",
     "RotatingJsonRenderer",
