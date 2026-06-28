@@ -4,7 +4,7 @@ from .analyzers import LLMFailureAnalyzer, OllamaFailureAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
 from .diagnostics import FailureDiagnosticsConfig, build_enriched_failure, effective_diagnostics_mode
 from .events import LLMAnalysisReady
-from .instrumentation import auto_instrument, instrument_module, narrative_class, no_stage
+from .instrumentation import auto_instrument, instrument_module, narrative_class, narrative_stage, no_stage
 from .renderer.json_renderer import JsonRenderer, RotatingJsonRenderer
 from .stage import stage
 from .story import story, StoryRuntime
@@ -26,6 +26,7 @@ __all__ = [
     "runtime_narrative_story",
     "runtime_narrative_stage",
     "narrative_class",
+    "narrative_stage",
     "no_stage",
     "instrument_module",
     "auto_instrument",
