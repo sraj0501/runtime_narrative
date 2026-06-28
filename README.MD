@@ -32,7 +32,8 @@ pip install "runtime-narrative[console]"    # colored terminal output (typer)
 pip install "runtime-narrative[fastapi]"    # FastAPI/Starlette middleware
 pip install "runtime-narrative[otel]"       # OpenTelemetry trace renderer
 pip install "runtime-narrative[prometheus]" # Prometheus metrics renderer
-pip install "runtime-narrative[all]"        # everything
+pip install "runtime-narrative[anthropic]"  # Anthropic Claude failure analyzer
+pip install "runtime-narrative[all]"        # everything above
 ```
 
 ---
@@ -141,6 +142,7 @@ The LLM response is structured and rendered inline:
 |---|---|---|
 | `OllamaFailureAnalyzer` | Ollama native `/api/generate` | Local Ollama |
 | `LLMFailureAnalyzer` | OpenAI-compatible `/v1/chat/completions` | vLLM, llama.cpp, LM Studio, Ollama OpenAI mode, any hosted API |
+| `AnthropicFailureAnalyzer` | Anthropic API | Claude Haiku / Sonnet / Opus (`[anthropic]` extra required) |
 
 ```python
 from runtime_narrative import LLMFailureAnalyzer
@@ -151,7 +153,53 @@ analyzer = LLMFailureAnalyzer(
 )
 ```
 
-Both fall back silently if the endpoint is unreachable — your application's exception still propagates normally.
+All analyzers fall back silently if the endpoint is unreachable — your application's exception still propagates normally.
+
+All analyzers request structured JSON (`exact_why`, `evidence`, `targeted_fix`, `code_changes`) from the model and render it into guaranteed `## Header` sections. Responses that are not valid JSON fall back to raw text.
+
+### Anthropic Claude analyzer
+
+`AnthropicFailureAnalyzer` requires the `[anthropic]` extra and an `ANTHROPIC_API_KEY` environment variable. Defaults to `claude-haiku-4-5-20251001`; override via `model=` or the `RUNTIME_NARRATIVE_MODEL` env var:
+
+```python
+from runtime_narrative import story, stage, AnthropicFailureAnalyzer
+
+analyzer = AnthropicFailureAnalyzer()          # reads ANTHROPIC_API_KEY from env
+# or explicitly:
+analyzer = AnthropicFailureAnalyzer(
+    api_key="sk-ant-...",
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    timeout_seconds=30.0,
+)
+
+async with story("Import Customers", failure_analyzer=analyzer):
+    async with stage("Insert Records"):
+        db.insert(rows)
+```
+
+### Context budget
+
+All analyzers accept `max_context_chars: int = 8000`. When the traceback would push the prompt over budget, it is trimmed from the top (keeping the most recent frames). If the budget is exhausted entirely, a `<traceback omitted>` marker is used instead:
+
+```python
+analyzer = LLMFailureAnalyzer(model="llama3", max_context_chars=4000)
+```
+
+### Failure deduplication
+
+`DeduplicatingAnalyzer` wraps any analyzer with an LRU cache. Repeated failures at the same location return the cached suggestion immediately — no redundant LLM calls:
+
+```python
+from runtime_narrative import DeduplicatingAnalyzer, OllamaFailureAnalyzer
+
+analyzer = DeduplicatingAnalyzer(
+    OllamaFailureAnalyzer(model="llama3"),
+    max_cache_size=256,   # LRU eviction above this count
+)
+```
+
+Cache key is a SHA-256 hash of `(error_type, filename, lineno, exception_chain)`. `None` results (network errors, timeouts) are never cached — next call retries the model. Thread-safe; works with both sync and async analysis paths.
 
 ### Background analysis
 
@@ -696,6 +744,13 @@ async with story("Import", failure_analyzer=MyAnalyzer()):
     ...
 ```
 
+Type-check your custom analyzer against the `FailureAnalyzer` protocol (all built-in analyzers already satisfy it):
+
+```python
+from runtime_narrative import FailureAnalyzer
+assert isinstance(MyAnalyzer(), FailureAnalyzer)
+```
+
 ---
 
 ## Environment variables
@@ -705,6 +760,8 @@ async with story("Import", failure_analyzer=MyAnalyzer()):
 | `RUNTIME_NARRATIVE_ENV` | `development`, `production` | `development` | Production caps traceback length and forces lean mode |
 | `RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS` | `lean`, `rich` | `lean` | `rich` captures local variables at the failing frames. Invalid values raise `ValueError` at story construction. |
 | `RUNTIME_NARRATIVE_ALLOW_RICH_IN_PRODUCTION` | `1`, `true` | off | Bypass production safeguard for rich diagnostics |
+| `RUNTIME_NARRATIVE_MODEL` | model name string | — | Default model for `AnthropicFailureAnalyzer`, `LLMFailureAnalyzer`, and `OllamaFailureAnalyzer` when `model=` is not passed explicitly |
+| `ANTHROPIC_API_KEY` | API key string | — | Required by `AnthropicFailureAnalyzer`; read automatically if not passed as `api_key=` |
 
 ---
 
