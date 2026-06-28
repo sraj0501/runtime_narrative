@@ -7,6 +7,7 @@ from types import ModuleType
 from typing import Sequence
 
 _SKIP_ATTR = "_narrative_skip"
+_STAGE_NAME_ATTR = "_narrative_stage_name"
 
 
 def no_stage(fn):
@@ -52,30 +53,104 @@ def _wrap_as_stage(fn, stage_name: str):
     return _sync_wrapper
 
 
-def narrative_class(cls):
-    """Class decorator — every public instance method becomes a stage.
+def narrative_stage(name: str | None = None):
+    """Per-method stage decorator for explicit naming.
 
-    The stage name is ``ClassName.method_name``.  Private methods (names
-    starting with ``_``), ``@no_stage``-marked methods, ``staticmethod``,
-    ``classmethod``, and ``property`` descriptors are left untouched.
+    Works both standalone and as an override inside ``@narrative_class``.
+    When used inside ``@narrative_class``, the custom name takes precedence
+    over the default ``ClassName.method_name`` and the method is not
+    double-wrapped.
+
+    Standalone::
+
+        @narrative_stage("Process Order")
+        def process(order): ...   # stage name: "Process Order"
+
+    Inside ``@narrative_class``::
 
         @narrative_class
         class OrderService:
-            def validate(self, order): ...   # → stage "OrderService.validate"
-            def charge(self, order): ...     # → stage "OrderService.charge"
+            @narrative_stage("Validate Order")
+            def validate(self, order): ...   # stage name: "Validate Order"
+
+            def charge(self, order): ...     # stage name: "OrderService.charge"
+    """
+    def decorator(fn):
+        stage_name = name or fn.__name__.replace("_", " ").strip().title()
+        wrapped = _wrap_as_stage(fn, stage_name)
+        setattr(wrapped, _STAGE_NAME_ATTR, stage_name)
+        return wrapped
+    return decorator
+
+
+def narrative_class(
+    _cls=None,
+    *,
+    instrument_classmethods: bool = False,
+    instrument_staticmethods: bool = False,
+):
+    """Class decorator — every public instance method becomes a stage.
+
+    The stage name is ``ClassName.method_name``.  Methods decorated with
+    ``@narrative_stage("name")`` keep their custom name and are not
+    re-wrapped.  Private methods (names starting with ``_``),
+    ``@no_stage``-marked methods, and ``property`` descriptors are left
+    untouched.  ``classmethod`` and ``staticmethod`` are skipped unless
+    ``instrument_classmethods=True`` / ``instrument_staticmethods=True``.
+
+        @narrative_class
+        class OrderService:
+            def validate(self, order): ...          # → "OrderService.validate"
+
+            @narrative_stage("Charge Customer")
+            def charge(self, order): ...            # → "Charge Customer"
 
             @no_stage
-            def _log(self, msg): ...         # not wrapped
+            def _log(self, msg): ...                # not wrapped
+
+        @narrative_class(instrument_classmethods=True)
+        class Factory:
+            @classmethod
+            def create(cls, **kw): ...              # → "Factory.create"
     """
-    for name, value in list(vars(cls).items()):
-        if not _is_instrumentable(name, value):
-            continue
-        if isinstance(value, (staticmethod, classmethod, property)):
-            continue
-        if not inspect.isfunction(value):
-            continue
-        setattr(cls, name, _wrap_as_stage(value, f"{cls.__name__}.{name}"))
-    return cls
+
+    def _apply(cls):
+        for name, value in list(vars(cls).items()):
+            if not _is_instrumentable(name, value):
+                continue
+
+            if isinstance(value, classmethod):
+                if instrument_classmethods:
+                    fn = value.__func__
+                    if not getattr(fn, _SKIP_ATTR, False) and not hasattr(fn, _STAGE_NAME_ATTR):
+                        setattr(cls, name, classmethod(_wrap_as_stage(fn, f"{cls.__name__}.{name}")))
+                continue
+
+            if isinstance(value, staticmethod):
+                if instrument_staticmethods:
+                    fn = value.__func__
+                    if not getattr(fn, _SKIP_ATTR, False) and not hasattr(fn, _STAGE_NAME_ATTR):
+                        setattr(cls, name, staticmethod(_wrap_as_stage(fn, f"{cls.__name__}.{name}")))
+                continue
+
+            if isinstance(value, property):
+                continue
+
+            if not inspect.isfunction(value):
+                continue
+
+            # Already wrapped by @narrative_stage — honour its custom name.
+            if hasattr(value, _STAGE_NAME_ATTR):
+                continue
+
+            setattr(cls, name, _wrap_as_stage(value, f"{cls.__name__}.{name}"))
+        return cls
+
+    if _cls is not None:
+        # Called as @narrative_class (no parentheses)
+        return _apply(_cls)
+    # Called as @narrative_class(...) with keyword arguments
+    return _apply
 
 
 def instrument_module(module: ModuleType) -> None:
