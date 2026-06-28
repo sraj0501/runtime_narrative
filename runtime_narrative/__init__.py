@@ -14,6 +14,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from .renderer.otel_renderer import OtelRenderer
+except ImportError:
+    pass
+
 __all__ = [
     "story",
     "StoryRuntime",
@@ -29,6 +34,7 @@ __all__ = [
     "RuntimeNarrativeMiddleware",
     "JsonRenderer",
     "RotatingJsonRenderer",
+    "OtelRenderer",
     "LLMAnalysisReady",
     "FailureDiagnosticsConfig",
     "build_enriched_failure",
