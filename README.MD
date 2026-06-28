@@ -28,9 +28,11 @@ pip install runtime-narrative
 Optional extras:
 
 ```bash
-pip install "runtime-narrative[console]"   # colored terminal output (typer)
-pip install "runtime-narrative[fastapi]"   # FastAPI/Starlette middleware
-pip install "runtime-narrative[all]"       # everything
+pip install "runtime-narrative[console]"    # colored terminal output (typer)
+pip install "runtime-narrative[fastapi]"    # FastAPI/Starlette middleware
+pip install "runtime-narrative[otel]"       # OpenTelemetry trace renderer
+pip install "runtime-narrative[prometheus]" # Prometheus metrics renderer
+pip install "runtime-narrative[all]"        # everything
 ```
 
 ---
@@ -377,7 +379,54 @@ class OrderService:
 
 Equivalent to manually wrapping each method in `with stage("OrderService.validate")`. The decorator handles both sync and async methods; use `async with story(...)` to fully await async renderers.
 
-**What is skipped:** names starting with `_`, `@no_stage`-marked methods, `@staticmethod`, `@classmethod`, `@property`, and inherited methods (apply `@narrative_class` to the base class separately).
+**What is skipped:** names starting with `_`, `@no_stage`-marked methods, `@property`, and inherited methods (apply `@narrative_class` to the base class separately). `@classmethod` and `@staticmethod` are skipped by default — see below.
+
+### `@narrative_stage`
+
+Override the auto-generated stage name for a specific method, or use it standalone on any function:
+
+```python
+from runtime_narrative import narrative_class, narrative_stage
+
+@narrative_class
+class OrderService:
+    @narrative_stage("Validate Order")   # custom name overrides "OrderService.validate"
+    def validate(self, order): ...
+
+    def charge(self, order): ...         # → "OrderService.charge" (default)
+```
+
+Standalone — any function, any depth, sync or async:
+
+```python
+@narrative_stage("Process Order")
+async def process(order):
+    ...
+```
+
+When `name` is omitted (`@narrative_stage()`), the function name is title-cased: `validate_order` → `"Validate Order"`.
+
+### Classmethods and staticmethods
+
+`@narrative_class` skips classmethods and staticmethods by default. Enable them explicitly:
+
+```python
+@narrative_class(instrument_classmethods=True, instrument_staticmethods=True)
+class Factory:
+    @classmethod
+    def create(cls): ...          # → "Factory.create"
+
+    @staticmethod
+    def validate(data): ...       # → "Factory.validate"
+
+    @classmethod
+    @no_stage
+    def _internal(cls): ...       # excluded by @no_stage
+
+    @classmethod
+    @narrative_stage("Build Widget")
+    def build(cls): ...           # → "Build Widget" (custom name)
+```
 
 ### `@no_stage`
 
@@ -455,6 +504,89 @@ All `story()` kwargs — `failure_analyzer`, `failure_diagnostics`, `runtime_env
 
 ---
 
+## OpenTelemetry integration
+
+`OtelRenderer` maps narrative events to OpenTelemetry spans. Requires the `[otel]` extra.
+
+```python
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+from runtime_narrative import story, stage, OtelRenderer
+
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+
+async with story("Process Order", renderers=[OtelRenderer(tracer_provider=provider)]):
+    async with stage("Validate"):
+        ...
+    async with stage("Charge"):
+        ...
+```
+
+| Narrative event | OTel concept |
+|---|---|
+| `StoryStarted` → `StoryCompleted` (success) | Root span, status `OK` |
+| `StoryStarted` → `StoryCompleted` (failure) | Root span, status `ERROR` + error attributes |
+| `StageStarted` → `StageCompleted` | Child span of the story root |
+| `FailureOccurred` | Sets `ERROR` status + attributes on root span; ends failing stage span as `ERROR` |
+| `LLMAnalysisReady` | Span event on root with `narrative.llm_analysis` attribute |
+
+Attributes on failure spans include `error.type`, `error.message`, `code.filepath`, `code.lineno`, `code.function`, `error.stack_trace`, `narrative.stage_name`, `narrative.exception_chain`.
+
+If no `tracer_provider` is passed, the globally configured provider is used (`trace.get_tracer_provider()`).
+
+### Filtering
+
+Skip low-value spans to reduce trace noise:
+
+```python
+OtelRenderer(
+    tracer_provider=provider,
+    exclude_stages={"health_check", "cache_lookup"},  # never create spans for these
+    min_duration_ms=5.0,   # suppress stage spans shorter than 5 ms
+    max_attribute_length=4096,  # truncate long string attributes (default 8192)
+)
+```
+
+`exclude_stages` stages that fail still mark the root span `ERROR` — only the child span is suppressed. `min_duration_ms` stages that fail are not filtered (failures always produce a span).
+
+---
+
+## Prometheus metrics
+
+`PrometheusRenderer` records four metrics via `prometheus-client`. Requires the `[prometheus]` extra.
+
+```python
+from runtime_narrative import story, stage, PrometheusRenderer
+
+async with story("Nightly Batch", renderers=[PrometheusRenderer()]):
+    async with stage("Load"):
+        ...
+    async with stage("Transform"):
+        ...
+```
+
+| Metric | Type | Labels |
+|---|---|---|
+| `narrative_story_duration_seconds` | Histogram | `story_name`, `success` (`"true"` / `"false"`) |
+| `narrative_stage_duration_seconds` | Histogram | `story_name`, `stage_name` |
+| `narrative_story_failures_total` | Counter | `story_name`, `error_type` |
+| `narrative_story_total` | Counter | `story_name`, `success` |
+
+Use a custom registry to isolate metrics across services or in tests:
+
+```python
+from prometheus_client import CollectorRegistry, start_http_server
+
+registry = CollectorRegistry()
+renderer = PrometheusRenderer(registry=registry)
+start_http_server(8000, registry=registry)
+```
+
+---
+
 ## Custom renderer
 
 Any object with a `handle(event)` method is a valid renderer. Async renderers (`async def handle`) are awaited automatically inside `async with story(...)`, including for `StageStarted` and `StageCompleted` events:
@@ -472,7 +604,18 @@ async with story("Nightly ETL", renderers=[SlackRenderer()]):
     ...
 ```
 
-Events you will receive: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, `LLMAnalysisReady` (only when `background_analysis=True`).
+Events you will receive:
+
+| Event | Key fields |
+|---|---|
+| `StoryStarted` | `story_id`, `story_name`, `timestamp` |
+| `StageStarted` | `story_id`, `stage_name`, `timestamp`, `stage_index` (0-based), `parent_stage_name` (for nested stages) |
+| `StageCompleted` | `story_id`, `stage_name`, `timestamp`, `duration_seconds`, `stage_index`, `parent_stage_name` |
+| `FailureOccurred` | `story_id`, `story_name`, `stage_name`, `error_type`, `error_message`, `filename`, `lineno`, `function`, `traceback_text`, `exception_chain`, `stage_timeline`, `llm_analysis`, … |
+| `StoryCompleted` | `story_id`, `story_name`, `success`, `progress_percent`, `completed_stages`, `total_stages`, `timestamp` |
+| `LLMAnalysisReady` | `story_id`, `story_name`, `stage_name`, `llm_analysis`, `timestamp` — only emitted when `background_analysis=True` |
+
+`stage_index` is the 0-based position of the stage in the story's stage list. `parent_stage_name` is `None` for top-level stages and set to the enclosing stage's name for nested stages.
 
 ---
 
