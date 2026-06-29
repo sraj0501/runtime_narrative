@@ -821,6 +821,82 @@ Both interceptors accept the same `renderers`, `failure_analyzer`, and diagnosti
 
 ---
 
+## Persistence and CLI
+
+`SqliteStoryRenderer` records every story and failure to a local SQLite database with no external dependencies:
+
+```python
+from runtime_narrative import story, stage
+from runtime_narrative.renderer.persistence_renderer import SqliteStoryRenderer
+
+async with story("Nightly ETL", renderers=[SqliteStoryRenderer("narrative.db")]):
+    async with stage("Load"):
+        pass
+    async with stage("Transform"):
+        pass
+```
+
+Then query from the terminal:
+
+```bash
+# List the 10 most recent failures
+runtime-narrative failures --db narrative.db
+
+# Filter by stage or story name
+runtime-narrative failures --stage "Load" --story "Nightly ETL" --last 20
+
+# Inspect a specific story
+runtime-narrative story abc12345 --db narrative.db
+```
+
+---
+
+## Alert routing
+
+`AlertRoutingRenderer` dispatches `FailureOccurred` events to HTTP webhooks and Slack. Destination errors are suppressed — they never crash your story:
+
+```python
+from runtime_narrative import story
+from runtime_narrative.renderer.alert_renderer import (
+    AlertRoutingRenderer, SlackWebhookDestination, HttpWebhookDestination,
+)
+
+renderer = AlertRoutingRenderer(
+    [
+        SlackWebhookDestination("https://hooks.slack.com/services/..."),
+        HttpWebhookDestination("https://alerts.internal/webhook"),
+    ],
+    only_stories={"Nightly ETL", "Import Pipeline"},  # None = all stories
+    only_error_types={"ValueError", "RuntimeError"},   # None = all errors
+)
+
+async with story("Nightly ETL", renderers=[renderer]):
+    ...
+```
+
+---
+
+## Custom redaction rules
+
+Beyond the built-in keyword list (`password`, `token`, `secret`, …), you can add regex patterns and a custom callback:
+
+```python
+from runtime_narrative import story
+from runtime_narrative import FailureDiagnosticsConfig
+
+config = FailureDiagnosticsConfig(
+    failure_diagnostics="rich",
+    redact_patterns=("^internal_.*", r"\bpii\b"),   # regex, case-insensitive
+    redact_callback=lambda key: key.startswith("corp_"),
+)
+
+with story("Pipeline", diagnostics_config=config):
+    ...
+# local vars matching the patterns or callback show as <redacted> in diagnostics
+```
+
+---
+
 ## Testing utilities
 
 `StoryRecorder` is a drop-in context manager that starts a story with a built-in capturing renderer and exposes assertion methods:

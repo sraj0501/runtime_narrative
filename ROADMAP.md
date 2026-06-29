@@ -135,34 +135,29 @@ The full ordered stage timeline (not a 5-stage tail) has been present since v0.2
 
 ---
 
-## Phase 6 — Production-grade persistence and alerting
+## Phase 6 — Production-grade persistence and alerting ✅ shipped in v1.0.0
 
 > **Goal:** Enable post-mortem analysis, failure trend tracking, and routing — without requiring external APM tooling.
 
-### 6.1 Story persistence renderer
+### 6.1 Story persistence renderer ✅ shipped in v1.0.0
 
-A renderer that writes completed stories (all events) to a SQLite or PostgreSQL table. Enables querying failure history, stage duration trends, and LLM suggestion recall.
+`SqliteStoryRenderer(path)` persists all six lifecycle events to SQLite. Three tables: `stories`, `stages`, `failures`. Duration computed via `julianday` arithmetic. No extra dependencies.
 
-### 6.2 CLI for story analysis
+### 6.2 CLI for story analysis ✅ shipped in v1.0.0
 
 ```bash
-# Replay the last N failures from the store
 runtime-narrative failures --last 10
-
-# Show the full story for a given story_id
+runtime-narrative failures --stage "Insert Records" --story "Nightly ETL"
 runtime-narrative story <story_id>
-
-# List all stories that failed at a specific stage
-runtime-narrative failures --stage "Insert Records"
 ```
 
-### 6.3 Alert routing renderer
+### 6.3 Alert routing renderer ✅ shipped in v1.0.0
 
-A renderer that dispatches `FailureOccurred` to configured destinations (Slack webhook, PagerDuty, email) with the LLM suggestion included. Supports routing rules (e.g., only alert on `production` environment or specific story names).
+`AlertRoutingRenderer(destinations, only_stories=..., only_error_types=...)` fans out `FailureOccurred` to `HttpWebhookDestination` and `SlackWebhookDestination`. Destination failures are swallowed — they never crash the story.
 
-### 6.4 Redaction configuration
+### 6.4 Redaction configuration ✅ shipped in v1.0.0
 
-Allow users to define custom redaction rules beyond the built-in keyword list — regex patterns, field path expressions, or a callback — to satisfy stricter data handling requirements.
+`FailureDiagnosticsConfig(redact_patterns=("^internal_.*",), redact_callback=my_fn)` extends the built-in keyword list with regex patterns and a custom predicate applied to local variable key names during rich diagnostics capture.
 
 ---
 

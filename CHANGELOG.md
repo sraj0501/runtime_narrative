@@ -4,6 +4,22 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.0.0 — 2026-06-29
+
+### Added
+- **`SqliteStoryRenderer(path)`** — sync renderer that persists all six lifecycle events to a SQLite database. Three tables: `stories`, `stages`, `failures`. Story duration computed via SQLite `julianday` arithmetic. `LLMAnalysisReady` back-fills the `llm_analysis` column. Queryable via the `runtime-narrative` CLI.
+- **`runtime-narrative` CLI** (`runtime_narrative/cli.py`, registered as a console script) — two sub-commands:
+  - `runtime-narrative failures [--db PATH] [--last N] [--stage NAME] [--story NAME]` — tabular list of recent failures.
+  - `runtime-narrative story STORY_ID [--db PATH]` — story header, stage table, and failure detail block.
+- **`AlertRoutingRenderer(destinations, *, only_stories=None, only_error_types=None)`** — async renderer that fans out `FailureOccurred` events to configured destinations via `asyncio.gather`. Destination failures are logged to `stderr` and swallowed — they never crash the story.
+  - **`HttpWebhookDestination(url, *, headers=None, timeout=10.0)`** — POST JSON payload to any HTTP endpoint via `asyncio.to_thread(urllib.request.urlopen, ...)`.
+  - **`SlackWebhookDestination(webhook_url)`** — subclass of `HttpWebhookDestination`; posts a Block Kit payload (header + detail section; optional analysis section when `llm_analysis` is present).
+- **`FailureDiagnosticsConfig.redact_patterns: tuple[str, ...]`** — additional regex patterns (case-insensitive `re.search`) matched against local variable key names during rich diagnostics capture.
+- **`FailureDiagnosticsConfig.redact_callback: Callable[[str], bool] | None`** — custom predicate called per key name; `True` → redact. Exceptions from the callback are caught and treated as non-redact.
+- Both new redaction fields flow through `merge()`, `_capture_locals_mapping`, and `_serialize_value`.
+
+---
+
 ## 0.9.0 — 2026-06-29
 
 ### Added
