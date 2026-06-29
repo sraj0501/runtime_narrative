@@ -33,6 +33,9 @@ pip install "runtime-narrative[fastapi]"    # FastAPI/Starlette middleware
 pip install "runtime-narrative[otel]"       # OpenTelemetry trace renderer
 pip install "runtime-narrative[prometheus]" # Prometheus metrics renderer
 pip install "runtime-narrative[anthropic]"  # Anthropic Claude failure analyzer
+pip install "runtime-narrative[django]"     # Django WSGI/ASGI middleware
+pip install "runtime-narrative[celery]"     # Celery task integration
+pip install "runtime-narrative[grpc]"       # gRPC server interceptors
 pip install "runtime-narrative[all]"        # everything above
 ```
 
@@ -690,6 +693,131 @@ registry = CollectorRegistry()
 renderer = PrometheusRenderer(registry=registry)
 start_http_server(8000, registry=registry)
 ```
+
+---
+
+## Django middleware
+
+`RuntimeNarrativeDjangoMiddleware` wraps every ASGI Django request in a story. `RuntimeNarrativeDjangoSyncMiddleware` does the same for WSGI (sync). Requires the `[django]` extra.
+
+```python
+# settings.py
+MIDDLEWARE = [
+    "runtime_narrative.middleware_django.RuntimeNarrativeDjangoMiddleware",
+    # ... other middleware
+]
+```
+
+Or with explicit options in an ASGI entry point:
+
+```python
+from runtime_narrative import RuntimeNarrativeDjangoMiddleware, JsonRenderer, OllamaFailureAnalyzer
+
+application = RuntimeNarrativeDjangoMiddleware(
+    get_response=django_asgi_app,
+    renderers=[JsonRenderer()],
+    failure_analyzer=OllamaFailureAnalyzer(model="llama3"),
+    runtime_environment="production",
+)
+```
+
+Story name is `"METHOD /path"` (e.g. `"POST /api/orders"`).
+
+---
+
+## Celery integration
+
+`NarrativeTask` is a Celery `Task` base class that wraps each task execution in a story. Requires the `[celery]` extra.
+
+```python
+from celery import Celery
+from runtime_narrative import NarrativeTask, OllamaFailureAnalyzer
+
+app = Celery("myapp")
+
+@app.task(base=NarrativeTask)
+def process_order(order_id):
+    with stage("Validate"):
+        validate(order_id)
+    with stage("Charge"):
+        charge(order_id)
+```
+
+To set defaults for all tasks in an app:
+
+```python
+from runtime_narrative import connect_narrative, JsonRenderer
+
+connect_narrative(
+    app,
+    renderers=[JsonRenderer()],
+    failure_analyzer=OllamaFailureAnalyzer(model="llama3"),
+    runtime_environment="production",
+)
+```
+
+Story name is `"<task.name> [task_id=<id>]"` (e.g. `"myapp.tasks.process_order [task_id=abc-123]"`). Override any option per-task by setting the `narrative_*` class attribute directly.
+
+---
+
+## Concurrent tasks — `NarrativeTaskGroup`
+
+Run multiple async tasks under a single story and track all their stages together. No extra dependencies required.
+
+```python
+from runtime_narrative import story, NarrativeTaskGroup
+
+async with story("Parallel Pipeline", renderers=[...]):
+    async with NarrativeTaskGroup() as tg:
+        tg.create_task(load_data(), name="Load Data")
+        tg.create_task(load_config(), name="Load Config")
+    # both completed — stages from both appear in the story timeline
+```
+
+Each task inherits the parent story's `ContextVar` context automatically, so `stage()` calls inside tasks are tracked normally. If tasks fail, `NarrativeTaskGroupError` is raised with a `failed_tasks: dict[str, BaseException]` mapping:
+
+```python
+from runtime_narrative import NarrativeTaskGroupError
+
+try:
+    async with NarrativeTaskGroup() as tg:
+        tg.create_task(risky_job(), name="Risky Job")
+except NarrativeTaskGroupError as e:
+    for task_name, exc in e.failed_tasks.items():
+        print(f"{task_name} failed: {exc}")
+```
+
+---
+
+## gRPC interceptors
+
+`RuntimeNarrativeInterceptor` (sync) and `RuntimeNarrativeAsyncInterceptor` (async) wrap each RPC in a story. Requires the `[grpc]` extra.
+
+```python
+import grpc
+from runtime_narrative import RuntimeNarrativeAsyncInterceptor, JsonRenderer
+
+interceptor = RuntimeNarrativeAsyncInterceptor(renderers=[JsonRenderer()])
+
+server = grpc.aio.server(interceptors=[interceptor])
+```
+
+Story name is the full gRPC method path, e.g. `"/mypackage.MyService/DoThing"`.
+
+For sync (non-async) gRPC servers:
+
+```python
+import grpc
+from runtime_narrative import RuntimeNarrativeInterceptor
+
+interceptor = RuntimeNarrativeInterceptor(renderers=[JsonRenderer()])
+server = grpc.server(
+    futures.ThreadPoolExecutor(),
+    interceptors=[interceptor],
+)
+```
+
+Both interceptors accept the same `renderers`, `failure_analyzer`, and diagnostic kwargs as all other integration points.
 
 ---
 

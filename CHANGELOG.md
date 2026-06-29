@@ -4,6 +4,23 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 0.8.0 — 2026-06-29
+
+### Added
+- **`RuntimeNarrativeDjangoMiddleware`** — async Django ASGI middleware (`[django]` extra required). Wraps every HTTP request in `async with story(...)`. Story name is `"METHOD /path"`. Auto-selects `ConsoleRenderer` on a TTY, `JsonRenderer` otherwise.
+- **`RuntimeNarrativeDjangoSyncMiddleware`** — sync Django WSGI middleware. Same interface and story-naming as the async variant; uses `with story(...)` instead.
+- **`NarrativeTask`** — Celery `Task` base class (`[celery]` extra required). Apply as `@app.task(base=NarrativeTask)`. Wraps each task execution in `with story("<task.name> [task_id=<id>]", ...)`. Class-level attributes (`narrative_renderers`, `narrative_failure_analyzer`, etc.) are overridable per task or globally via `connect_narrative`.
+- **`connect_narrative(celery_app, *, renderers, failure_analyzer, ...)`** — sets `NarrativeTask` class-level defaults for all tasks in an app without requiring `base=NarrativeTask` on every task definition.
+- **`NarrativeTaskGroup`** — async context manager for concurrent asyncio tasks under a shared story. `create_task(coro, *, name=None)` schedules work; tasks inherit the parent story context automatically via asyncio ContextVar copy. On exit, waits for all tasks and raises `NarrativeTaskGroupError` if any failed. Works on Python 3.9+, no extra dependencies.
+- **`NarrativeTaskGroupError`** — raised by `NarrativeTaskGroup` when one or more tasks fail. `failed_tasks: dict[str, BaseException]` maps task name → exception.
+- **`RuntimeNarrativeInterceptor`** — sync gRPC `ServerInterceptor` (`[grpc]` extra required). Wraps unary RPCs in `with story(method_path, ...)`.
+- **`RuntimeNarrativeAsyncInterceptor`** — async gRPC `aio.ServerInterceptor`. Wraps each RPC in `async with story(method_path, ...)`.
+- **`[django]` optional extra** — `django>=3.2`.
+- **`[celery]` optional extra** — `celery>=5.0`.
+- **`[grpc]` optional extra** — `grpcio>=1.50.0`.
+
+---
+
 ## 0.7.0 — 2026-06-29
 
 ### Added
