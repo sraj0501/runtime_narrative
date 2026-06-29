@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "runtime-narrative"
 version = "1.0.0"
 description = "Model execution as human-readable stories with lean/rich failure diagnostics and optional LLM analysis"
-readme = "README.MD"
+readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
