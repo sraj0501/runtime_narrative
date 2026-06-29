@@ -1,4 +1,4 @@
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
@@ -55,6 +55,12 @@ except ImportError:
     pass
 
 from .task_group import NarrativeTaskGroup, NarrativeTaskGroupError
+from .testing import StoryRecorder
+
+try:
+    from .renderer.html_renderer import HtmlReportRenderer
+except ImportError:
+    pass
 
 __all__ = [
     "story",
@@ -91,4 +97,6 @@ __all__ = [
     "NarrativeTaskGroupError",
     "RuntimeNarrativeInterceptor",
     "RuntimeNarrativeAsyncInterceptor",
+    "StoryRecorder",
+    "HtmlReportRenderer",
 ]

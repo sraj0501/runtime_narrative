@@ -25,6 +25,7 @@ class StoryRuntime:
     renderers: Sequence[object] = field(default_factory=tuple)
     failed_stage_name: str | None = None
     declared_total_stages: int | None = field(default=None, repr=False)
+    dry_run: bool = False
 
     def set_total_stages(self, n: int) -> None:
         self.declared_total_stages = n
@@ -166,6 +167,7 @@ class story:
         app_roots: Sequence[str] | None = None,
         redact_extra: Sequence[str] | None = None,
         total_stages: int | None = None,
+        dry_run: bool = False,
     ):
         from .renderer.console import ConsoleRenderer
 
@@ -173,6 +175,7 @@ class story:
             name=name,
             renderers=renderers or (ConsoleRenderer(),),
             declared_total_stages=total_stages,
+            dry_run=dry_run,
         )
         self.failure_analyzer = failure_analyzer
         self.background_analysis = background_analysis

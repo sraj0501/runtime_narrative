@@ -4,6 +4,18 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 0.9.0 — 2026-06-29
+
+### Added
+- **`StoryRecorder`** (`runtime_narrative.testing`) — dual sync/async context manager for test assertions. Starts a story with a capturing renderer; exposes `events` list and four assertion methods: `assert_stages_completed(names)`, `assert_no_failure()`, `assert_stage_failed(stage_name, *, error_type=None)`, `assert_story_completed(*, success=None)`.
+- **`HtmlReportRenderer(path)`** — renderer that writes a self-contained HTML report on `StoryCompleted`. Includes story header (name, duration, status badge), per-stage duration bar chart, and a failure detail section with traceback and optional LLM analysis.
+- **`dry_run=False` on `story()`** — when `True`, stage bodies that raise exceptions have the exception suppressed and the stage is still marked completed. The story completes as `success=True`. Useful for verifying instrumentation wiring without executing expensive side effects. Works with both sync `with stage()` and `async with stage()`.
+
+### Changed
+- **5.4 stage timeline was already complete** — the full ordered stage timeline (not a 5-stage tail) has been present since v0.2.0. The roadmap item is now explicitly marked done.
+
+---
+
 ## 0.8.0 — 2026-06-29
 
 ### Added

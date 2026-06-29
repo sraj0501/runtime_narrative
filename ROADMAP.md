@@ -102,11 +102,11 @@ Items within each phase are roughly priority-ordered. Phases are sequential in i
 
 ---
 
-## Phase 5 — Developer experience
+## Phase 5 — Developer experience ✅ shipped in v0.9.0
 
 > **Goal:** Make the library easy to adopt, debug, and trust — especially for teams onboarding it into an existing codebase.
 
-### 5.1 Test utilities
+### 5.1 Test utilities ✅ shipped in v0.9.0
 
 An assertion API for unit and integration tests:
 
@@ -121,17 +121,17 @@ recorder.assert_no_failure()
 recorder.assert_stage_failed("Insert Records", error_type="ValueError")
 ```
 
-### 5.2 Story HTML report
+### 5.2 Story HTML report ✅ shipped in v0.9.0
 
-After a story completes (or after a batch run), generate a self-contained HTML timeline showing every stage, its duration, and the failure detail if any. Useful for sharing post-mortems or pipeline run summaries.
+`HtmlReportRenderer(path)` writes a self-contained HTML page on `StoryCompleted` — story header, per-stage duration bars, and failure detail section with traceback and optional LLM analysis.
 
-### 5.3 `dry_run` mode
+### 5.3 `dry_run` mode ✅ shipped in v0.9.0
 
-Run a story without executing any stage body — just emit `StageStarted` / `StageCompleted` events in sequence. Useful for verifying that instrumentation is wired up correctly before running an expensive pipeline.
+`story(..., dry_run=True)` suppresses stage-body exceptions, marks all stages as completed, and emits `StoryCompleted(success=True)`. Useful for verifying instrumentation wiring without running expensive operations.
 
-### 5.4 Story timeline in failure context
+### 5.4 Story timeline in failure context ✅ shipped in v0.2.0
 
-The `stage_timeline` field already records the last 5 stages. Extend it to include the full ordered list of stages with statuses, so the LLM and human reader both see the complete execution path, not just a tail.
+The full ordered stage timeline (not a 5-stage tail) has been present since v0.2.0. This item is already complete.
 
 ---
 
