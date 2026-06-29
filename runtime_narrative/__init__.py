@@ -1,4 +1,4 @@
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
@@ -62,6 +62,16 @@ try:
 except ImportError:
     pass
 
+try:
+    from .renderer.persistence_renderer import SqliteStoryRenderer
+except ImportError:
+    pass
+
+try:
+    from .renderer.alert_renderer import AlertRoutingRenderer, HttpWebhookDestination, SlackWebhookDestination
+except ImportError:
+    pass
+
 __all__ = [
     "story",
     "StoryRuntime",
@@ -99,4 +109,8 @@ __all__ = [
     "RuntimeNarrativeAsyncInterceptor",
     "StoryRecorder",
     "HtmlReportRenderer",
+    "SqliteStoryRenderer",
+    "AlertRoutingRenderer",
+    "HttpWebhookDestination",
+    "SlackWebhookDestination",
 ]
