@@ -821,6 +821,89 @@ Both interceptors accept the same `renderers`, `failure_analyzer`, and diagnosti
 
 ---
 
+## Testing utilities
+
+`StoryRecorder` is a drop-in context manager that starts a story with a built-in capturing renderer and exposes assertion methods:
+
+```python
+from runtime_narrative import stage
+from runtime_narrative.testing import StoryRecorder
+
+def test_etl_stages():
+    with StoryRecorder("ETL") as r:
+        with stage("Load"):
+            pass
+        with stage("Validate"):
+            pass
+        with stage("Export"):
+            pass
+
+    r.assert_stages_completed(["Load", "Validate", "Export"])
+    r.assert_no_failure()
+
+def test_invalid_input_fails_at_validate():
+    with pytest.raises(ValueError):
+        with StoryRecorder("ETL") as r:
+            with stage("Load"):
+                pass
+            with stage("Validate"):
+                raise ValueError("bad schema")
+
+    r.assert_stage_failed("Validate", error_type="ValueError")
+    r.assert_story_completed(success=False)
+```
+
+Works as `async with StoryRecorder(...)` too — pass any `**story_kwargs` (including `dry_run=True`).
+
+---
+
+## `dry_run` mode
+
+Pass `dry_run=True` to `story()` to suppress all stage-body exceptions and still emit `StageStarted` / `StageCompleted` for every stage. The story always completes as `success=True`. Useful for verifying instrumentation wiring before running expensive operations:
+
+```python
+with story("Nightly ETL", dry_run=True):
+    with stage("Load Warehouse"):
+        raise IOError("would connect to DB in production")
+    with stage("Transform"):
+        raise RuntimeError("would run transforms in production")
+    with stage("Export"):
+        raise IOError("would upload in production")
+# → StageCompleted emitted for all 3 stages, StoryCompleted(success=True)
+```
+
+Combine with `StoryRecorder` to assert your stage wiring without side effects:
+
+```python
+with StoryRecorder("Nightly ETL", dry_run=True) as r:
+    run_pipeline()
+
+r.assert_stages_completed(["Load Warehouse", "Transform", "Export"])
+r.assert_no_failure()
+```
+
+---
+
+## HTML report
+
+`HtmlReportRenderer` writes a self-contained HTML file when the story completes:
+
+```python
+from runtime_narrative import story, stage
+from runtime_narrative.renderer.html_renderer import HtmlReportRenderer
+
+with story("Batch Job", renderers=[HtmlReportRenderer("report.html", open_browser=True)]):
+    with stage("Load"):
+        pass
+    with stage("Process"):
+        pass
+# → report.html written; browser opens automatically if open_browser=True
+```
+
+The report includes: story name, duration, success/failure badge, a per-stage duration bar chart, and a failure detail section with traceback and LLM analysis (if any).
+
+---
+
 ## Custom renderer
 
 Any object with a `handle(event)` method is a valid renderer. Async renderers (`async def handle`) are awaited automatically inside `async with story(...)`, including for `StageStarted` and `StageCompleted` events:

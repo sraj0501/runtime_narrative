@@ -57,7 +57,9 @@ class stage:
         self.record.duration_seconds = (ended_at - self.record.started_at).total_seconds()
 
         story_runtime = current_story.get()
-        if story_runtime is not None and exc_type is not None:
+        dry_run = story_runtime.dry_run if story_runtime is not None else False
+
+        if story_runtime is not None and exc_type is not None and not dry_run:
             story_runtime.failed_stage_name = self.record.name
 
         stack = list(current_stage_stack.get())
@@ -68,9 +70,10 @@ class stage:
         if story_runtime is None:
             return False
 
-        if exc_type is None:
+        if exc_type is None or dry_run:
             self.record.completed = True
             await story_runtime.on_stage_completed_async(self.record)
+            return dry_run and exc_type is not None
         else:
             self.record.failed = True
         return False
@@ -81,7 +84,9 @@ class stage:
         self.record.duration_seconds = (ended_at - self.record.started_at).total_seconds()
 
         story_runtime = current_story.get()
-        if story_runtime is not None and exc_type is not None:
+        dry_run = story_runtime.dry_run if story_runtime is not None else False
+
+        if story_runtime is not None and exc_type is not None and not dry_run:
             story_runtime.failed_stage_name = self.record.name
 
         stack = list(current_stage_stack.get())
@@ -92,9 +97,10 @@ class stage:
         if story_runtime is None:
             return False
 
-        if exc_type is None:
+        if exc_type is None or dry_run:
             self.record.completed = True
             story_runtime.on_stage_completed(self.record)
+            return dry_run and exc_type is not None
         else:
             self.record.failed = True
         return False
