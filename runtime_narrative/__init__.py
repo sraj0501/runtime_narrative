@@ -1,4 +1,4 @@
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .decorators import runtime_narrative_stage, runtime_narrative_story
@@ -39,6 +39,23 @@ try:
 except ImportError:
     pass
 
+try:
+    from .middleware_django import RuntimeNarrativeDjangoMiddleware, RuntimeNarrativeDjangoSyncMiddleware
+except ImportError:
+    pass
+
+try:
+    from .celery import NarrativeTask, connect_narrative
+except ImportError:
+    pass
+
+try:
+    from .grpc_interceptor import RuntimeNarrativeInterceptor, RuntimeNarrativeAsyncInterceptor
+except ImportError:
+    pass
+
+from .task_group import NarrativeTaskGroup, NarrativeTaskGroupError
+
 __all__ = [
     "story",
     "StoryRuntime",
@@ -66,4 +83,12 @@ __all__ = [
     "FailureDiagnosticsConfig",
     "build_enriched_failure",
     "effective_diagnostics_mode",
+    "RuntimeNarrativeDjangoMiddleware",
+    "RuntimeNarrativeDjangoSyncMiddleware",
+    "NarrativeTask",
+    "connect_narrative",
+    "NarrativeTaskGroup",
+    "NarrativeTaskGroupError",
+    "RuntimeNarrativeInterceptor",
+    "RuntimeNarrativeAsyncInterceptor",
 ]
