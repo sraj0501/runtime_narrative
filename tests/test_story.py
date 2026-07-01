@@ -181,6 +181,74 @@ def test_nested_stories_context_restores_after_inner_exits() -> None:
 
 # ── (existing test follows) ───────────────────────────────────────────────────
 
+# ── Sub-story linkage (parent_story_id / root_story_id) ──────────────────────
+
+def test_substory_gets_parent_and_root_story_id() -> None:
+    cap = CapturingRenderer()
+
+    with story("API", renderers=[cap]) as api_runtime:
+        with story("DB") as db_runtime:
+            pass
+
+    assert db_runtime.parent_story_id == api_runtime.story_id
+    assert db_runtime.root_story_id == api_runtime.story_id
+    assert api_runtime.parent_story_id is None
+    assert api_runtime.root_story_id == api_runtime.story_id
+
+    started = [e for e in cap.events if e.__class__.__name__ == "StoryStarted"]
+    db_started = next(e for e in started if e.story_name == "DB")
+    assert db_started.parent_story_id == api_runtime.story_id
+    assert db_started.root_story_id == api_runtime.story_id
+
+
+def test_substory_three_levels_share_one_root() -> None:
+    with story("Root") as root_runtime:
+        with story("Mid") as mid_runtime:
+            with story("Leaf") as leaf_runtime:
+                pass
+
+    assert mid_runtime.parent_story_id == root_runtime.story_id
+    assert leaf_runtime.parent_story_id == mid_runtime.story_id
+    assert mid_runtime.root_story_id == root_runtime.story_id
+    assert leaf_runtime.root_story_id == root_runtime.story_id
+
+
+def test_substory_inherits_renderers_and_diagnostics_when_not_given() -> None:
+    cap = CapturingRenderer()
+
+    with story("API", renderers=[cap], failure_diagnostics="rich") as api_runtime:
+        with story("DB") as db_runtime:
+            pass
+
+    assert db_runtime.renderers == api_runtime.renderers
+    assert db_runtime._diag_config is api_runtime._diag_config
+
+    names = [e.__class__.__name__ for e in cap.events]
+    # DB sub-story's own events reached the inherited (outer) renderer.
+    assert names.count("StoryStarted") == 2
+    assert names.count("StoryCompleted") == 2
+
+
+def test_substory_explicit_renderers_override_inheritance() -> None:
+    outer_cap = CapturingRenderer()
+    inner_cap = CapturingRenderer()
+
+    with story("API", renderers=[outer_cap]):
+        with story("DB", renderers=[inner_cap]):
+            pass
+
+    assert len(inner_cap.events) == 2  # Started + Completed for "DB" only
+    assert all(e.story_name == "DB" for e in inner_cap.events)
+
+
+def test_story_completed_carries_duration_seconds() -> None:
+    cap = CapturingRenderer()
+    with story("S", renderers=[cap]):
+        pass
+    completed = next(e for e in cap.events if e.__class__.__name__ == "StoryCompleted")
+    assert completed.duration_seconds >= 0.0
+
+
 def test_background_analysis_emits_llm_ready() -> None:
     class QuickAnalyzer:
         async def analyze_failure_async(self, **kwargs: object) -> str:

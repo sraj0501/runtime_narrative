@@ -1,4 +1,4 @@
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .context import has_active_story
@@ -8,12 +8,14 @@ from .events import (
     Event,
     FailureOccurred,
     LLMAnalysisReady,
+    LogRecorded,
     StageCompleted,
     StageStarted,
     StoryCompleted,
     StoryStarted,
 )
 from .instrumentation import auto_instrument, instrument_module, narrative_class, narrative_stage, no_stage
+from .logging_bridge import NarrativeLogHandler
 from .renderer.console import ConsoleRenderer
 from .renderer.json_renderer import JsonRenderer, RotatingJsonRenderer
 from .stage import stage
@@ -114,6 +116,8 @@ __all__ = [
     "FailureOccurred",
     "StoryCompleted",
     "LLMAnalysisReady",
+    "LogRecorded",
+    "NarrativeLogHandler",
     "FailureDiagnosticsConfig",
     "build_enriched_failure",
     "effective_diagnostics_mode",

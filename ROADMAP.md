@@ -29,6 +29,12 @@ Items within each phase are roughly priority-ordered. Phases are sequential in i
   - `OtelRenderer` — maps narrative events to OpenTelemetry spans; `exclude_stages` and `min_duration_ms` filtering params
   - `PrometheusRenderer` — four metrics: story/stage duration histograms, failure and total counters
   - `StageStarted` / `StageCompleted` now carry `stage_index` and `parent_stage_name` for nested stage tracking
+- **Sub-story tracing and log capture** (`v1.1.0`)
+  - `story()` nested inside an active `story()` auto-links as a sub-story: inherits `renderers`/`diagnostics_config`/`failure_analyzer`, sets `parent_story_id`/`root_story_id`
+  - `StoryCompleted.duration_seconds`
+  - `LogRecorded` event + `NarrativeLogHandler` — routes stdlib `logging` warnings/errors into the story pipeline
+  - `ConsoleRenderer` — `[short_id]` tag + per-story-family color + nesting-depth indentation
+  - `OtelRenderer` — sub-stories become child spans of their parent
 - **Phase 2 OTel integration** (`v0.6.0`)
   - `OtelLogRenderer` — all 6 lifecycle events as OTel log records (INFO/DEBUG/ERROR); correlates trace/span IDs from ambient context
   - `OtelMetricsRenderer` — 4 OTel instruments: `narrative.stage.duration`, `narrative.story.duration`, `narrative.story.failures`, `narrative.llm.analysis_latency`
@@ -171,6 +177,17 @@ runtime-narrative story <story_id>
 ---
 
 ## Changelog
+
+### 1.1.0
+
+**New features — Sub-story tracing and log capture**
+
+- Sub-stories — `story()` opened while another is active automatically links as a sub-story (`parent_story_id`, `root_story_id`), inheriting `renderers`/`diagnostics_config`/`failure_analyzer` unless given explicitly. No new API.
+- `StoryCompleted.duration_seconds` — total story elapsed time.
+- `LogRecorded` event + `NarrativeLogHandler` — folds stdlib `logging` warning/error calls into the story event pipeline; optional `fallback` handler for logs emitted outside a story.
+- `ConsoleRenderer` — `[short_id]` tag + deterministic per-story-family color + nesting-depth indentation, so the call tree is visible directly in console output.
+- `OtelRenderer` — sub-stories become child spans of their parent story's span instead of orphaned roots.
+- `JsonRenderer` — emits `LogRecorded`; includes `parent_story_id`/`root_story_id`/`duration_seconds` in relevant payloads.
 
 ### 0.8.0
 

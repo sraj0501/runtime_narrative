@@ -39,6 +39,7 @@ Turn any Python execution into a traceable **story** composed of named **stages*
 - [Testing utilities](#testing-utilities)
 - [Custom renderers and analyzers](#custom-renderers-and-analyzers)
 - [Utilities](#utilities)
+- [Sub-stories and log capture](#sub-stories-and-log-capture)
 - [Environment variables](#environment-variables)
 
 ---
@@ -471,7 +472,7 @@ Renderers never crash a story — if a renderer raises, a warning is printed to 
 
 ### `ConsoleRenderer` (default)
 
-Colored terminal output for local development. Falls back to `print` and ASCII glyphs (`>`, `[ok]`, `[FAIL]`) when `typer` is absent or the terminal is not UTF-8 (e.g. Windows cp1252):
+Colored terminal output for local development. Falls back to `print` and ASCII glyphs (`>`, `[ok]`, `[FAIL]`) when `typer` is absent or the terminal is not UTF-8 (e.g. Windows cp1252). Every line is tagged with a `[short_id]` (first 6 characters of `story_id`), color-coded per story family, and indented by nesting depth — see [Sub-stories and log capture](#sub-stories-and-log-capture) for how this looks with nested stages and sub-stories:
 
 ```python
 from runtime_narrative import ConsoleRenderer
@@ -1033,6 +1034,65 @@ async with story("Payment Saga", renderers=[JsonRenderer()]) as runtime:
 ```
 
 Run: `uv run python examples/saga_record_failure.py`
+
+---
+
+## Sub-stories and log capture
+
+### Sub-stories
+
+Opening a `story()` while another is already active (in the same sync/async context) makes it a **sub-story**: it inherits the parent's `renderers`, `diagnostics_config`, and `failure_analyzer` unless you pass your own, and its `StoryStarted`/`StoryCompleted`/`FailureOccurred` events carry `parent_story_id` and `root_story_id` so the whole call tree can be reconstructed from events alone — no new API, no tree data structure to maintain yourself:
+
+```python
+async def create_order(payload):
+    async with story(f"POST /orders") as api_story:
+        async with stage("Persist Order"):
+            # Same story() primitive. Because api_story is already active,
+            # this becomes a sub-story: parent_story_id == api_story.story_id,
+            # root_story_id == api_story.story_id (or further up if api_story
+            # is itself nested), and renderers/diagnostics are inherited.
+            async with story("DB: INSERT orders") as db_story:
+                async with stage("Execute Query"):
+                    await conn.execute("INSERT INTO orders ...")
+```
+
+Each sub-story succeeds or fails independently (a failed DB call doesn't automatically fail the API story unless the exception propagates or you call `record_failure`), and gets its own `duration_seconds` on `StoryCompleted`. `OtelRenderer` maps this to proper parent/child spans automatically.
+
+Because linkage is derived from `ContextVar` state at the moment `story()` is entered — not from a shared registry — the same reusable function (e.g. a `execute_query()` helper) can be called from many different parent stories, including concurrently: `asyncio.Task` copies context at creation and each OS thread starts with a fresh top-level context, so concurrent API calls sharing one DB helper never cross-contaminate each other's story tree.
+
+Run: `uv run python examples/substory_db_call.py`
+
+### `NarrativeLogHandler` — capture existing `logging` calls into a story
+
+If your application already uses `logging.warning()`/`.error()`, `NarrativeLogHandler` routes those records into the same event pipeline as `story()`/`stage()` — one stream instead of two:
+
+```python
+import logging
+from runtime_narrative import NarrativeLogHandler
+
+logging.getLogger().addHandler(NarrativeLogHandler(level=logging.WARNING))
+```
+
+Each captured record becomes a `LogRecorded` event (`story_id`, `root_story_id`, `stage_name`, `level`, `logger_name`, `message`, optional `exc_text`) emitted through the active story's renderers. Outside an active story, records fall through to an optional `fallback` handler so nothing is silently dropped:
+
+```python
+NarrativeLogHandler(level=logging.WARNING, fallback=logging.StreamHandler())
+```
+
+`ConsoleRenderer` prints every event (including `LogRecorded`) with a `[short_id]` tag — the first 6 characters of that event's `story_id` — so a specific call is identifiable when scanning or searching output. All events belonging to one story family (a root story and any sub-stories) additionally render in the same deterministic color, and lines are indented one level per stage/sub-story nesting depth, so the call tree (API call → DB sub-story → its own stages) is visible directly in the log output:
+
+```
+[ad8cc2] ▶ Story started: POST /orders
+  [ad8cc2] ▶ Stage started: Persist Order
+    [d17c63] ▶ Story started: DB: INSERT orders
+      [d17c63] ▶ Stage started: Execute Query
+      [d17c63] ✔ Stage completed: Execute Query (0.021s)
+    [d17c63] ▶ Story ended: SUCCESS (0.034s)
+  [ad8cc2] ✔ Stage completed: Persist Order (0.034s)
+[ad8cc2] ▶ Story ended: SUCCESS (0.052s)
+```
+
+Run: `uv run python examples/logging_bridge.py`
 
 ---
 

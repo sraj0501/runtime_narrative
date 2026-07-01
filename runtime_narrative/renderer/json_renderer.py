@@ -28,6 +28,8 @@ class JsonRenderer:
                 "story_id": event.story_id,
                 "story_name": event.story_name,
                 "timestamp": event.timestamp.isoformat(),
+                "parent_story_id": getattr(event, "parent_story_id", None),
+                "root_story_id": getattr(event, "root_story_id", ""),
             })
 
         elif event_name == "StageStarted":
@@ -45,6 +47,21 @@ class JsonRenderer:
                 "stage_name": event.stage_name,
                 "duration_seconds": event.duration_seconds,
                 "timestamp": event.timestamp.isoformat(),
+                "root_story_id": getattr(event, "root_story_id", ""),
+            })
+
+        elif event_name == "LogRecorded":
+            self._dump({
+                "event": "LogRecorded",
+                "story_id": event.story_id,
+                "story_name": event.story_name,
+                "root_story_id": event.root_story_id,
+                "stage_name": event.stage_name,
+                "level": event.level,
+                "logger_name": event.logger_name,
+                "message": event.message,
+                "timestamp": event.timestamp.isoformat(),
+                "exc_text": event.exc_text,
             })
 
         elif event_name == "FailureOccurred":
@@ -80,6 +97,8 @@ class JsonRenderer:
                 "traceback_truncated": getattr(event, "traceback_truncated", False),
                 "locals_by_frame": getattr(event, "locals_by_frame", None),
                 "redaction_removed_keys": getattr(event, "redaction_removed_keys", 0),
+                "parent_story_id": getattr(event, "parent_story_id", None),
+                "root_story_id": getattr(event, "root_story_id", ""),
             }
             if getattr(event, "traceback_text", None) is not None:
                 payload["traceback_text"] = event.traceback_text
@@ -107,6 +126,9 @@ class JsonRenderer:
                     "total_stages": event.total_stages,
                 },
                 "timestamp": event.timestamp.isoformat(),
+                "duration_seconds": getattr(event, "duration_seconds", 0.0),
+                "parent_story_id": getattr(event, "parent_story_id", None),
+                "root_story_id": getattr(event, "root_story_id", ""),
             })
 
 

@@ -4,6 +4,22 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.1.0 — 2026-07-01
+
+Sub-story tracing and stdlib `logging` capture. No breaking changes.
+
+### Added
+- **Sub-stories** — opening `story()` while another is already active (in the same sync/async context) now automatically links it as a sub-story: `renderers`, `diagnostics_config`, and `failure_analyzer` are inherited from the parent unless passed explicitly, and `parent_story_id` / `root_story_id` are set automatically. No new API — the existing `story()` primitive detects nesting via the same `ContextVar` mechanism `stage()` already uses for `parent_stage_name`.
+- **`parent_story_id: str | None` and `root_story_id: str`** on `StoryStarted`, `StoryCompleted`, and `FailureOccurred` — lets any consumer reconstruct the full call tree (API call → DB sub-story → ...) from events alone.
+- **`duration_seconds: float`** on `StoryCompleted` — total story elapsed time, previously only derivable by diffing `StoryStarted`/`StoryCompleted` timestamps yourself.
+- **`LogRecorded` event + `NarrativeLogHandler`** (`runtime_narrative.logging_bridge`) — a standard `logging.Handler` that routes captured `logging.warning()`/`.error()` calls into the active story's event pipeline instead of a second, disconnected log stream. Falls back to an optional `fallback` handler when no story is active, so nothing is silently dropped. Both are exported at top level.
+- **`ConsoleRenderer`**: every rendered line (including `LogRecorded`) is now tagged with `[short_id]` (first 6 characters of that event's `story_id`) and colored per story family (a root story and its sub-stories share one deterministic color), so concurrent/nested stories are identifiable when scanning or searching console output.
+- **`ConsoleRenderer`**: lines are indented one level per stage/sub-story nesting depth, so the call tree renders visually in the log output without needing a separate tree/report renderer.
+- **`OtelRenderer`**: sub-stories now become real child spans of their parent story's span (previously every `StoryStarted` produced an orphaned root span, even when nested).
+- **`JsonRenderer`**: emits `LogRecorded` events and includes `parent_story_id`, `root_story_id`, and `duration_seconds` in `StoryStarted`/`StoryCompleted`/`FailureOccurred` payloads.
+
+---
+
 ## 1.0.1 — 2026-07-01
 
 Patch release addressing six usability issues (#19–#24). No breaking changes.

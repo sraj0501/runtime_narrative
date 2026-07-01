@@ -9,12 +9,13 @@ import pytest
 import runtime_narrative.renderer.console as console_mod
 from runtime_narrative.events import (
     FailureOccurred,
+    LogRecorded,
     StageCompleted,
     StageStarted,
     StoryCompleted,
     StoryStarted,
 )
-from runtime_narrative.renderer.console import ConsoleRenderer, _stdout_supports_unicode
+from runtime_narrative.renderer.console import ConsoleRenderer, _short_id, _stdout_supports_unicode
 
 
 # ── T1: Unicode detection and glyph selection ─────────────────────────────────
@@ -118,3 +119,82 @@ def test_failure_event_renders_without_typer(monkeypatch, capsys):
     assert "Failure" in out
     assert "ValueError" in out
     assert "bad input" in out
+
+
+# ── short-id tag + LogRecorded rendering ─────────────────────────────────────
+
+def test_short_id_uses_first_six_chars_without_dashes() -> None:
+    assert _short_id("abcd1234-ef56-...") == "abcd12"
+    assert _short_id(None) == "------"
+    assert _short_id("") == "------"
+
+
+def test_story_started_line_includes_short_id_tag(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    r.handle(StoryStarted(story_id="abcdef1234567890", story_name="S", timestamp=datetime(2024, 6, 1)))
+    out = capsys.readouterr().out
+    assert "[abcdef]" in out
+
+
+def test_log_recorded_renders_with_short_id_and_stage(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    event = LogRecorded(
+        story_id="abcdef1234567890",
+        story_name="API",
+        root_story_id="abcdef1234567890",
+        stage_name="Call DB",
+        level="WARNING",
+        logger_name="myapp.db",
+        message="slow query",
+        timestamp=datetime(2024, 6, 1),
+    )
+    r.handle(event)
+    out = capsys.readouterr().out
+    assert "[abcdef]" in out
+    assert "WARNING" in out
+    assert "[Call DB]" in out
+    assert "myapp.db" in out
+    assert "slow query" in out
+
+
+def test_log_recorded_includes_exc_text_when_present(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    event = LogRecorded(
+        story_id="s1", story_name="API", root_story_id="s1", stage_name="",
+        level="ERROR", logger_name="myapp", message="failed",
+        timestamp=datetime(2024, 6, 1), exc_text="Traceback...\nValueError: boom",
+    )
+    r.handle(event)
+    out = capsys.readouterr().out
+    assert "ValueError: boom" in out
+
+
+def test_nested_stage_and_substory_lines_are_indented(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    ts = datetime(2024, 6, 1)
+
+    r.handle(StoryStarted(story_id="api", story_name="API", timestamp=ts))
+    r.handle(StageStarted(story_id="api", stage_name="Persist Order", timestamp=ts))
+    r.handle(StoryStarted(story_id="db", story_name="DB", timestamp=ts, parent_story_id="api", root_story_id="api"))
+    r.handle(StageStarted(story_id="db", stage_name="Execute Query", timestamp=ts, root_story_id="api"))
+    r.handle(StageCompleted(story_id="db", stage_name="Execute Query", duration_seconds=0.1, timestamp=ts, root_story_id="api"))
+    r.handle(StoryCompleted(story_id="db", story_name="DB", success=True, progress_percent=100, completed_stages=1, total_stages=1, timestamp=ts, parent_story_id="api", root_story_id="api"))
+    r.handle(StageCompleted(story_id="api", stage_name="Persist Order", duration_seconds=0.2, timestamp=ts))
+    r.handle(StoryCompleted(story_id="api", story_name="API", success=True, progress_percent=1, completed_stages=1, total_stages=1, timestamp=ts))
+
+    lines = capsys.readouterr().out.splitlines()
+    indent_of = {line.strip(): len(line) - len(line.lstrip(" ")) for line in lines if line.strip()}
+
+    story_line = next(l for l in indent_of if "Story started: API" in l)
+    stage_line = next(l for l in indent_of if "Stage started: Persist Order" in l)
+    substory_line = next(l for l in indent_of if "Story started: DB" in l)
+    substage_line = next(l for l in indent_of if "Stage started: Execute Query" in l)
+
+    assert indent_of[story_line] == 0
+    assert indent_of[stage_line] > indent_of[story_line]
+    assert indent_of[substory_line] > indent_of[stage_line]
+    assert indent_of[substage_line] > indent_of[substory_line]

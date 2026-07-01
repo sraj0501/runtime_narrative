@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 import re
 import shutil
 import sys
@@ -10,6 +11,24 @@ except ImportError:  # pragma: no cover
     typer = None
 
 from . import RenderProtocol
+
+_STORY_COLOR_PALETTE = (
+    "CYAN", "MAGENTA", "YELLOW", "BLUE", "GREEN",
+    "BRIGHT_CYAN", "BRIGHT_MAGENTA", "BRIGHT_YELLOW", "BRIGHT_BLUE", "BRIGHT_GREEN",
+)
+
+
+def _short_id(story_id: str | None) -> str:
+    if not story_id:
+        return "------"
+    return story_id.replace("-", "")[:6]
+
+
+def _color_for_id(story_id: str | None):
+    if not story_id or typer is None:
+        return None
+    idx = int(hashlib.sha1(story_id.encode()).hexdigest(), 16) % len(_STORY_COLOR_PALETTE)
+    return getattr(typer.colors, _STORY_COLOR_PALETTE[idx], None)
 
 
 def _stdout_supports_unicode() -> bool:
@@ -31,6 +50,20 @@ class ConsoleRenderer:
             self._glyph_arrow = ">"
             self._glyph_check = "[ok]"
             self._glyph_cross = "[FAIL]"
+        # story_id -> indent level of that story's own Story started/ended lines
+        self._story_base_indent: dict[str, int] = {}
+        # story_id -> stack of currently open stage names, for indent depth
+        self._stage_stacks: dict[str, list[str]] = {}
+
+    def _story_base(self, story_id: str) -> int:
+        return self._story_base_indent.get(story_id, 0)
+
+    def _open_stage_depth(self, story_id: str) -> int:
+        return len(self._stage_stacks.get(story_id, []))
+
+    @staticmethod
+    def _indent(level: int) -> str:
+        return "  " * max(0, level)
 
     @property
     def _success_color(self):
@@ -83,6 +116,15 @@ class ConsoleRenderer:
     def _label(self, label: str, value: str, *, label_fg=None, value_fg=None) -> None:
         self._secho(f"{label} ", fg=label_fg, bold=True, nl=False)
         self._secho(value, fg=value_fg)
+
+    @staticmethod
+    def _story_tag(event: object) -> tuple[str, object]:
+        """Return a "[short_id]" tag for *event* plus a color shared by the whole
+        story family (root + any sub-stories), so concurrent/nested stories can
+        be told apart visually without relying on a tree layout."""
+        story_id = getattr(event, "story_id", "") or ""
+        root_id = getattr(event, "root_story_id", "") or story_id
+        return f"[{_short_id(story_id)}]", _color_for_id(root_id)
 
     @staticmethod
     def _strip_markdown(text: str) -> str:
@@ -159,16 +201,37 @@ class ConsoleRenderer:
         event_name = event.__class__.__name__
 
         if event_name == "StoryStarted":
+            parent_id = getattr(event, "parent_story_id", None)
+            if parent_id is not None and parent_id in self._story_base_indent:
+                base = self._story_base(parent_id) + self._open_stage_depth(parent_id) + 1
+            else:
+                base = 0
+            self._story_base_indent[event.story_id] = base
+            tag, color = self._story_tag(event)
+            self._secho(f"{self._indent(base)}{tag} ", fg=color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Story started: ", fg=self._success_color, bold=True, nl=False)
             self._secho(event.story_name, fg=self._success_value_color, bold=True)
             return
 
         if event_name == "StageStarted":
+            base = self._story_base(event.story_id)
+            stack = self._stage_stacks.setdefault(event.story_id, [])
+            indent = self._indent(base + len(stack) + 1)
+            stack.append(event.stage_name)
+            tag, color = self._story_tag(event)
+            self._secho(f"{indent}{tag} ", fg=color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Stage started: ", fg=self._success_color, bold=True, nl=False)
             self._secho(event.stage_name, fg=self._success_value_color)
             return
 
         if event_name == "StageCompleted":
+            base = self._story_base(event.story_id)
+            stack = self._stage_stacks.get(event.story_id, [])
+            indent = self._indent(base + len(stack))
+            if stack:
+                stack.pop()
+            tag, color = self._story_tag(event)
+            self._secho(f"{indent}{tag} ", fg=color, bold=True, nl=False)
             self._secho(f"{self._glyph_check} Stage completed: ", fg=self._success_color, bold=True, nl=False)
             self._secho(
                 f"{event.stage_name} ({event.duration_seconds:.3f}s)",
@@ -176,8 +239,29 @@ class ConsoleRenderer:
             )
             return
 
+        if event_name == "LogRecorded":
+            base = self._story_base(event.story_id)
+            indent = self._indent(base + self._open_stage_depth(event.story_id))
+            tag, color = self._story_tag(event)
+            level = event.level.upper()
+            noisy = level in ("WARNING", "ERROR", "CRITICAL")
+            level_color = self._failure_color if noisy else color
+            message_color = self._failure_value_color if noisy else None
+            stage_part = f" [{event.stage_name}]" if event.stage_name else ""
+            self._secho(f"{indent}{tag} ", fg=color, bold=True, nl=False)
+            self._secho(f"{level}{stage_part} {event.logger_name}: ", fg=level_color, bold=True, nl=False)
+            self._secho(event.message, fg=message_color)
+            if event.exc_text:
+                for line in event.exc_text.splitlines():
+                    self._secho(f"  {line}", fg=self._failure_value_color)
+            return
+
         if event_name == "FailureOccurred":
-            self._secho(f"\n{self._glyph_cross} Failure detected", fg=self._failure_color, bold=True)
+            base = self._story_base(event.story_id)
+            indent = self._indent(base + self._open_stage_depth(event.story_id))
+            tag, color = self._story_tag(event)
+            self._secho(f"\n{indent}{tag} ", fg=color, bold=True, nl=False)
+            self._secho(f"{self._glyph_cross} Failure detected", fg=self._failure_color, bold=True)
             self._label("Story:", event.story_name, label_fg=self._failure_color, value_fg=self._failure_value_color)
             self._label("Stage:", event.stage_name, label_fg=self._failure_color, value_fg=self._failure_value_color)
             self._label(
@@ -268,7 +352,10 @@ class ConsoleRenderer:
             return
 
         if event_name == "LLMAnalysisReady":
-            self._secho("")
+            base = self._story_base(event.story_id)
+            indent = self._indent(base + self._open_stage_depth(event.story_id))
+            tag, color = self._story_tag(event)
+            self._secho(f"\n{indent}{tag}", fg=color, bold=True)
             self._render_box(
                 "LLM Debug",
                 event.llm_analysis,
@@ -279,11 +366,17 @@ class ConsoleRenderer:
             return
 
         if event_name == "StoryCompleted":
+            indent = self._indent(self._story_base(event.story_id))
+            tag, tag_color = self._story_tag(event)
             state = "SUCCESS" if event.success else "FAILED"
             color = self._success_color if event.success else self._failure_color
             value_color = self._success_value_color if event.success else self._failure_value_color
+            self._secho(f"{indent}{tag} ", fg=tag_color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Story ended: ", fg=color, bold=True, nl=False)
-            self._secho(state, fg=value_color, bold=True)
+            duration = getattr(event, "duration_seconds", 0.0)
+            self._secho(f"{state} ({duration:.3f}s)", fg=value_color, bold=True)
+            self._story_base_indent.pop(event.story_id, None)
+            self._stage_stacks.pop(event.story_id, None)
 
 
 __all__ = ["ConsoleRenderer"]

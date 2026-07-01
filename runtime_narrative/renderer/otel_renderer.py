@@ -60,8 +60,12 @@ class OtelRenderer:
         name = event.__class__.__name__
 
         if name == "StoryStarted":
+            parent_id = getattr(event, "parent_story_id", None)
+            parent_span = self._story_spans.get(parent_id) if parent_id else None
+            ctx = trace.set_span_in_context(parent_span) if parent_span is not None else None
             span = self._tracer.start_span(
                 event.story_name,
+                context=ctx,
                 start_time=_to_ns(event.timestamp),
             )
             self._story_spans[event.story_id] = span

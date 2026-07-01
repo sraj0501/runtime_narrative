@@ -22,6 +22,7 @@
 18. [Custom Failure Analyzers](#18-custom-failure-analyzers)
 19. [Environment Variables](#19-environment-variables)
 20. [Event Reference](#20-event-reference)
+21. [Sub-stories and Log Capture](#21-sub-stories-and-log-capture)
 
 ---
 
@@ -1081,9 +1082,11 @@ async with story("My Pipeline", renderers=[RendererA(), RendererB()]):
 
 ### 10.1 ConsoleRenderer
 
-Prints colored, human-readable output to stdout. Uses `typer.secho` for color when the `console` extra is installed; falls back to plain `print` otherwise. Automatically substitutes ASCII glyphs (`>`, `[ok]`, `[FAIL]`) for Unicode ones on non-UTF-8 terminals. Handles all six events.
+Prints colored, human-readable output to stdout. Uses `typer.secho` for color when the `console` extra is installed; falls back to plain `print` otherwise. Automatically substitutes ASCII glyphs (`>`, `[ok]`, `[FAIL]`) for Unicode ones on non-UTF-8 terminals. Handles all seven events (including `LogRecorded`).
 
 `ConsoleRenderer` is the default when no `renderers=` argument is passed to `story()`.
+
+Every line carries a `[short_id]` tag (first 6 characters of that event's `story_id`), colored per story family (a root story and its sub-stories share one deterministic color), and indented by nesting depth (one level per open stage / sub-story). See [§21 Sub-stories and Log Capture](#21-sub-stories-and-log-capture) for the full nested output.
 
 ```python
 from runtime_narrative import story, stage, ConsoleRenderer  # top-level import
@@ -2290,8 +2293,8 @@ All events are plain `dataclasses` and are part of the stable public API. Import
 ```python
 from runtime_narrative import (
     StoryStarted, StageStarted, StageCompleted,
-    FailureOccurred, StoryCompleted, LLMAnalysisReady,
-    Event,   # Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted, LLMAnalysisReady]
+    FailureOccurred, StoryCompleted, LLMAnalysisReady, LogRecorded,
+    Event,   # Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted, LLMAnalysisReady, LogRecorded]
 )
 ```
 
@@ -2312,6 +2315,8 @@ Emitted when the story context is entered.
 | `story_id` | `str` | UUID for this story execution |
 | `story_name` | `str` | The name passed to `story(name)` |
 | `timestamp` | `datetime` | Wall-clock time at story start |
+| `parent_story_id` | `str \| None` | `story_id` of the enclosing story, or `None` for a root story |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor (itself, if this is a root story) |
 
 ### StageStarted
 
@@ -2325,6 +2330,7 @@ Emitted when a `stage()` context is entered.
 | `timestamp` | `datetime` | Wall-clock time at stage start |
 | `stage_index` | `int` | Zero-based position of this stage in the story (default `0`) |
 | `parent_stage_name` | `str \| None` | Name of the enclosing stage, or `None` for top-level stages |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor story (lets a renderer group stages by call tree, not just by story) |
 
 ### StageCompleted
 
@@ -2339,6 +2345,7 @@ Emitted when a stage exits without exception (or in `dry_run` mode even if it ra
 | `duration_seconds` | `float` | Elapsed time from stage enter to stage exit |
 | `stage_index` | `int` | Zero-based position (default `0`) |
 | `parent_stage_name` | `str \| None` | Name of the enclosing stage, or `None` |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor story |
 
 `story_name` on stage events means a renderer can filter by story without tracking a `story_id → story_name` side table populated from `StoryStarted`/`StoryCompleted`. Run: `uv run python examples/stage_story_name.py`
 
@@ -2375,6 +2382,8 @@ Emitted when an exception propagates out of the story block. Contains the full e
 | `traceback_truncated` | `bool` | `True` if `traceback_text` was capped |
 | `locals_by_frame` | `dict \| None` | Local variables per frame (rich mode only); keys are `"frame_0"`, `"frame_1"`, etc. |
 | `redaction_removed_keys` | `int` | Count of local variable keys that were redacted |
+| `parent_story_id` | `str \| None` | `story_id` of the enclosing story, or `None` for a root story |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor story |
 
 ### StoryCompleted
 
@@ -2389,6 +2398,9 @@ Emitted unconditionally at story exit, after any `FailureOccurred`.
 | `completed_stages` | `int` | Final count of completed stages |
 | `total_stages` | `int` | Total stages seen or declared |
 | `timestamp` | `datetime` | Wall-clock time at story exit |
+| `duration_seconds` | `float` | Elapsed time from story enter to story exit |
+| `parent_story_id` | `str \| None` | `story_id` of the enclosing story, or `None` for a root story |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor story |
 
 ### LLMAnalysisReady
 
@@ -2401,3 +2413,87 @@ Emitted after `StoryCompleted` only when `background_analysis=True` and the anal
 | `stage_name` | `str` | Stage where the failure occurred |
 | `llm_analysis` | `str` | Analyzer output text |
 | `timestamp` | `datetime` | Wall-clock time when the analysis completed |
+
+### LogRecorded
+
+Emitted by `NarrativeLogHandler` when it captures a stdlib `logging` record while a story is active.
+
+| Field | Type | Description |
+|---|---|---|
+| `story_id` | `str` | UUID of the story active when the record was captured |
+| `story_name` | `str` | Name of that story |
+| `root_story_id` | `str` | `story_id` of the top-most ancestor story |
+| `stage_name` | `str` | Name of the active stage, or `""` if none |
+| `level` | `str` | `record.levelname`, e.g. `"WARNING"` |
+| `logger_name` | `str` | `record.name` |
+| `message` | `str` | `record.getMessage()` |
+| `timestamp` | `datetime` | `record.created` as a `datetime` |
+| `exc_text` | `str \| None` | Formatted exception text if the record carried `exc_info` |
+
+---
+
+## 21. Sub-stories and Log Capture
+
+### Sub-stories
+
+`story()` opened while another `story()` is already active (in the same sync/async context) automatically becomes a **sub-story** — no new API. It:
+
+- Inherits `renderers`, `diagnostics_config`, and `failure_analyzer` from the parent unless you pass your own explicitly.
+- Sets `parent_story_id` to the parent's `story_id`.
+- Sets `root_story_id` to the top-most ancestor's `story_id` (so a 3-level nesting all shares one `root_story_id`).
+- Still succeeds/fails and times itself independently — a failed sub-story does not automatically fail its parent.
+
+```python
+async def execute_query(sql: str):
+    async with story(f"DB: {sql}") as db_story:
+        async with stage("Execute Query"):
+            await conn.execute(sql)
+
+async def create_order():
+    async with story("POST /orders") as api_story:
+        async with stage("Persist Order"):
+            await execute_query("INSERT INTO orders ...")
+            # execute_query's story is a sub-story of api_story:
+            #   parent_story_id == api_story.story_id
+            #   root_story_id   == api_story.story_id
+```
+
+This works correctly under concurrency without extra effort: `asyncio.Task` copies `ContextVar` state at creation time, and each OS thread starts with a fresh top-level context, so multiple concurrent callers of a shared helper like `execute_query()` never cross-link into each other's story tree. `OtelRenderer` uses `parent_story_id` to make sub-stories real child spans of their parent span.
+
+Run: `uv run python examples/substory_db_call.py`
+
+### `NarrativeLogHandler`
+
+Routes existing `logging.warning()`/`.error()` calls into the same event pipeline as `story()`/`stage()`, instead of a second, disconnected log stream:
+
+```python
+import logging
+from runtime_narrative import NarrativeLogHandler
+
+logging.getLogger().addHandler(NarrativeLogHandler(level=logging.WARNING))
+```
+
+Each captured record becomes a `LogRecorded` event. Outside an active story, records fall through to an optional `fallback` handler so nothing outside instrumentation is silently dropped:
+
+```python
+NarrativeLogHandler(level=logging.WARNING, fallback=logging.StreamHandler())
+```
+
+`ConsoleRenderer` tags every rendered line — including `LogRecorded` — with `[short_id]` (the first 6 characters of that event's `story_id`), and colors all events belonging to one story family (a root story plus any sub-stories) the same deterministic color. This gives a visual way to tell interleaved/concurrent stories apart on the console.
+
+Lines are also indented one level per stage/sub-story nesting depth, so the call tree renders directly in the log:
+
+```
+[ad8cc2] ▶ Story started: POST /orders
+  [ad8cc2] ▶ Stage started: Persist Order
+    [d17c63] ▶ Story started: DB: INSERT orders
+      [d17c63] ▶ Stage started: Execute Query
+      [d17c63] ✔ Stage completed: Execute Query (0.021s)
+    [d17c63] ▶ Story ended: SUCCESS (0.034s)
+  [ad8cc2] ✔ Stage completed: Persist Order (0.034s)
+[ad8cc2] ▶ Story ended: SUCCESS (0.052s)
+```
+
+The indent level for each story is tracked per `story_id` internally (base indent for a sub-story = parent's indent + parent's currently-open stage depth + 1) and cleaned up when that story's `StoryCompleted` is handled, so long-running processes don't leak memory per story.
+
+Run: `uv run python examples/logging_bridge.py`
