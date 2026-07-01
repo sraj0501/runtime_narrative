@@ -19,13 +19,16 @@ class StageRecord:
 
 
 class stage:
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, optional: bool = False):
         self.name = name
+        self.optional = optional
         self.record = StageRecord(name=name)
 
     def __enter__(self) -> StageRecord:
         story_runtime = current_story.get()
         if story_runtime is None:
+            if self.optional:
+                return self.record
             raise RuntimeError("stage() must run inside an active story() context")
 
         stack = list(current_stage_stack.get())
@@ -40,6 +43,8 @@ class stage:
     async def __aenter__(self) -> StageRecord:
         story_runtime = current_story.get()
         if story_runtime is None:
+            if self.optional:
+                return self.record
             raise RuntimeError("stage() must run inside an active story() context")
 
         stack = list(current_stage_stack.get())

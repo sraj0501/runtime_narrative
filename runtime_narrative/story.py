@@ -26,6 +26,7 @@ class StoryRuntime:
     failed_stage_name: str | None = None
     declared_total_stages: int | None = field(default=None, repr=False)
     dry_run: bool = False
+    _diag_config: Any = field(default=None, repr=False)
 
     def set_total_stages(self, n: int) -> None:
         self.declared_total_stages = n
@@ -68,6 +69,7 @@ class StoryRuntime:
             timestamp=datetime.now(),
             stage_index=stage.stage_index,
             parent_stage_name=stage.parent_stage_name,
+            story_name=self.name,
         ))
 
     async def on_stage_started_async(self, stage: StageRecord) -> None:
@@ -77,6 +79,7 @@ class StoryRuntime:
             timestamp=datetime.now(),
             stage_index=stage.stage_index,
             parent_stage_name=stage.parent_stage_name,
+            story_name=self.name,
         ))
 
     def on_stage_completed(self, stage: StageRecord) -> None:
@@ -92,6 +95,7 @@ class StoryRuntime:
                 duration_seconds=duration_seconds,
                 stage_index=stage.stage_index,
                 parent_stage_name=stage.parent_stage_name,
+                story_name=self.name,
             )
         )
 
@@ -108,8 +112,60 @@ class StoryRuntime:
                 duration_seconds=duration_seconds,
                 stage_index=stage.stage_index,
                 parent_stage_name=stage.parent_stage_name,
+                story_name=self.name,
             )
         )
+
+    async def record_failure(
+        self,
+        exc: BaseException,
+        *,
+        stage_name: str | None = None,
+    ) -> None:
+        """Emit FailureOccurred for *exc* without affecting exception propagation.
+
+        Use this in saga rollback handlers or other contexts where you drive the
+        story context manager manually and need to record a failure without relying
+        on ``__aexit__`` owning the exception lifecycle.
+        """
+        from .diagnostics import FailureDiagnosticsConfig
+        exc_type = type(exc)
+        tb = exc.__traceback__
+        config = self._diag_config if self._diag_config is not None else FailureDiagnosticsConfig.from_env()
+        enriched = await asyncio.to_thread(build_enriched_failure, exc_type, exc, tb, config=config)
+        failed_stage = stage_name or self.failed_stage_name or (
+            current_stage_stack.get()[-1].name if current_stage_stack.get() else "<unknown>"
+        )
+        timeline = self.build_stage_timeline()
+        await self.emit_async(FailureOccurred(
+            story_id=self.story_id,
+            story_name=self.name,
+            stage_name=failed_stage,
+            error_type=enriched.summary.error_type,
+            error_message=enriched.summary.error_message,
+            filename=enriched.summary.filename,
+            lineno=enriched.summary.lineno,
+            function=enriched.summary.function,
+            source_line=enriched.summary.source_line,
+            exception_chain=enriched.summary.exception_chain,
+            exact_cause=enriched.summary.exact_cause,
+            llm_analysis=None,
+            stage_timeline=timeline,
+            progress_percent=self.progress_percent,
+            completed_stages=self.completed_stages,
+            total_stages=self.total_stages,
+            timestamp=datetime.now(),
+            traceback_text=enriched.summary.traceback_text,
+            diagnostics_mode=enriched.diagnostics_mode,
+            primary_frame_reason=enriched.primary_frame_reason,
+            stack_frames=list(enriched.stack_frames),
+            source_snippet=enriched.source_snippet,
+            compressed_stack_summary=enriched.compressed_stack_summary,
+            hidden_frame_count=enriched.hidden_frame_count,
+            traceback_truncated=enriched.traceback_truncated,
+            locals_by_frame=enriched.locals_by_frame,
+            redaction_removed_keys=enriched.redaction_removed_keys,
+        ))
 
     def build_stage_timeline(self) -> str:
         if not self.stages:
@@ -171,12 +227,6 @@ class story:
     ):
         from .renderer.console import ConsoleRenderer
 
-        self.runtime = StoryRuntime(
-            name=name,
-            renderers=renderers or (ConsoleRenderer(),),
-            declared_total_stages=total_stages,
-            dry_run=dry_run,
-        )
         self.failure_analyzer = failure_analyzer
         self.background_analysis = background_analysis
         if diagnostics_config is not None:
@@ -197,6 +247,13 @@ class story:
                 app_roots=roots,
                 redact_extra=extra,
             )
+        self.runtime = StoryRuntime(
+            name=name,
+            renderers=renderers or (ConsoleRenderer(),),
+            declared_total_stages=total_stages,
+            dry_run=dry_run,
+            _diag_config=self._diag_config,
+        )
         self._story_token = None
         self._stack_token = None
 
