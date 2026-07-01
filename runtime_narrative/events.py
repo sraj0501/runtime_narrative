@@ -19,6 +19,7 @@ class StageStarted:
     timestamp: datetime
     stage_index: int = 0
     parent_stage_name: str | None = None
+    story_name: str = ""
 
 
 @dataclass
@@ -29,6 +30,7 @@ class StageCompleted:
     duration_seconds: float
     stage_index: int = 0
     parent_stage_name: str | None = None
+    story_name: str = ""
 
 
 @dataclass

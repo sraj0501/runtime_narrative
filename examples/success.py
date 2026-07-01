@@ -1,7 +1,16 @@
+"""Success path using story()/stage() context managers directly.
+
+Shows the minimal API: no decorators, no LLM analyzer, just a story with
+three stages that all complete successfully. total_stages gives the renderer
+accurate progress percentages.
+
+Run:
+    uv run python examples/success.py
+"""
 from runtime_narrative import stage, story
 
 
-with story("Import Customers"):
+with story("Import Customers", total_stages=3):
     with stage("Load CSV"):
         rows = ["alice", "bob"]
 

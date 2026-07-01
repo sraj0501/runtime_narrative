@@ -1,10 +1,20 @@
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
+from .context import has_active_story
 from .decorators import runtime_narrative_stage, runtime_narrative_story
 from .diagnostics import FailureDiagnosticsConfig, build_enriched_failure, effective_diagnostics_mode
-from .events import LLMAnalysisReady
+from .events import (
+    Event,
+    FailureOccurred,
+    LLMAnalysisReady,
+    StageCompleted,
+    StageStarted,
+    StoryCompleted,
+    StoryStarted,
+)
 from .instrumentation import auto_instrument, instrument_module, narrative_class, narrative_stage, no_stage
+from .renderer.console import ConsoleRenderer
 from .renderer.json_renderer import JsonRenderer, RotatingJsonRenderer
 from .stage import stage
 from .story import story, StoryRuntime
@@ -83,18 +93,26 @@ __all__ = [
     "no_stage",
     "instrument_module",
     "auto_instrument",
+    "has_active_story",
     "FailureAnalyzer",
     "LLMFailureAnalyzer",
     "OllamaFailureAnalyzer",
     "AnthropicFailureAnalyzer",
     "DeduplicatingAnalyzer",
     "RuntimeNarrativeMiddleware",
+    "ConsoleRenderer",
     "JsonRenderer",
     "RotatingJsonRenderer",
     "OtelRenderer",
     "OtelLogRenderer",
     "OtelMetricsRenderer",
     "PrometheusRenderer",
+    "Event",
+    "StoryStarted",
+    "StageStarted",
+    "StageCompleted",
+    "FailureOccurred",
+    "StoryCompleted",
     "LLMAnalysisReady",
     "FailureDiagnosticsConfig",
     "build_enriched_failure",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -73,6 +73,7 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         app_roots: Sequence[str] | None = None,
         redact_extra: Sequence[str] | None = None,
         propagate_trace_context: bool = True,
+        skip_if: Callable[[Request], bool] | None = None,
     ):
         super().__init__(app)
         self._renderers = tuple(renderers) if renderers is not None else _default_middleware_renderers()
@@ -84,8 +85,12 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         self._app_roots = app_roots
         self._redact_extra = redact_extra
         self._propagate_trace_context = propagate_trace_context
+        self._skip_if = skip_if
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        if self._skip_if is not None and self._skip_if(request):
+            return await call_next(request)
+
         token = None
         if _OTEL_PROPAGATION_AVAILABLE and self._propagate_trace_context:
             ctx = _otel_propagate.extract(dict(request.headers))
