@@ -4,6 +4,18 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.2.1 — 2026-07-01
+
+Patch release: a new example plus a Unicode-fallback bug fix. No breaking changes.
+
+### Added
+- **`examples/colorful_errors_and_emojis.py`** — combined demo of `ConsoleRenderer`'s always-on color/glyphs and `level_icons` emoji prefixes across every log level, plus the colorful failure box. Referenced from README and WIKI §10.1/§21.
+
+### Fixed
+- **`ConsoleRenderer._secho`** — the `typer`-absent fallback (`print(...)`) had no `UnicodeEncodeError` handling, unlike the `typer.secho` path. On a non-UTF-8 terminal (e.g. Windows `cp1252`) without the `console` extra installed, a `level_icons` emoji or any other unencodable character would raise, get swallowed by the renderer safety net in `story.py`, and silently drop the line. Now falls back to encode/decode-with-replace like the `typer` path, matching documented behavior.
+
+---
+
 ## 1.2.0 — 2026-07-01
 
 Structured log fields, customizable `ConsoleRenderer` styles, and per-story renderer routing. No breaking changes.

@@ -131,7 +131,12 @@ class ConsoleRenderer:
     @staticmethod
     def _secho(text: str, *, fg=None, bold: bool = False, nl: bool = True) -> None:
         if typer is None:
-            print(text, end="\n" if nl else "")
+            try:
+                print(text, end="\n" if nl else "")
+            except UnicodeEncodeError:
+                enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+                safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+                print(safe, end="\n" if nl else "")
             return
         try:
             typer.secho(text, fg=fg, bold=bold, nl=nl)
