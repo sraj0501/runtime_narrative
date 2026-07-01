@@ -109,7 +109,7 @@ A **story** is a named execution scope. It owns a `StoryRuntime` that tracks all
 
 **Stages** are the named steps inside a story. Each stage emits `StageStarted` on entry and, if it completes without error, `StageCompleted` with its duration. If a stage raises an exception, it marks the stage as failed and lets the exception propagate to the story boundary, where it is caught and turned into `FailureOccurred`. Stages can nest: opening a `stage()` inside another `stage()` records `parent_stage_name` on the inner record.
 
-**Events** are plain frozen dataclasses with no behavior. The six events are: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, and `LLMAnalysisReady`. Any renderer that understands these types can do arbitrary things with them.
+**Events** are plain dataclasses with no behavior. The six events are: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, and `LLMAnalysisReady`. All six are part of the stable public API and importable directly from `runtime_narrative` — see [Section 20](#20-event-reference). Any renderer that understands these types can do arbitrary things with them.
 
 **Renderers** receive every event via their `handle` method. There is no base class and no registration system — any object with `handle(self, event: object) -> None` qualifies. Async renderers declare `async def handle(self, event: object)` and are awaited only when the story itself is running asynchronously (via `async with story(...)`).
 
@@ -334,6 +334,32 @@ asyncio.run(deploy())
 | `build_stage_timeline()` | method | Returns a one-line stage summary string |
 | `emit(event)` | method | Sync dispatch to all renderers |
 | `emit_async(event)` | method | Async dispatch, awaiting async renderers |
+| `record_failure(exc, *, stage_name=None)` | async method | Emit `FailureOccurred` for *exc* without affecting exception propagation (see below) |
+
+### record_failure() — explicit failure recording
+
+Use `await runtime.record_failure(exc)` in saga or rollback handlers where you need to record a failure *without* relying on `__aexit__` owning the exception lifecycle:
+
+```python
+import asyncio
+from runtime_narrative import story, stage
+
+async def saga():
+    async with story("Payment Saga", renderers=[...]) as runtime:
+        try:
+            async with stage("Charge Card"):
+                raise ConnectionError("gateway timeout")
+        except ConnectionError as exc:
+            # Record the failure — FailureOccurred is emitted with full diagnostics
+            await runtime.record_failure(exc, stage_name="Charge Card")
+            # You control what happens next — compensate, re-raise, or swallow
+            await rollback()
+            raise
+
+asyncio.run(saga())
+```
+
+`record_failure` runs the same diagnostics pipeline as the normal `__aexit__` path (lean/rich mode, redaction, traceback capping) and emits `FailureOccurred` via `emit_async`. It never suppresses or re-raises the exception.
 
 ### Tracking progress
 
@@ -465,18 +491,29 @@ In the event stream, `StageStarted` for `"Compile"` has `parent_stage_name="Buil
 
 ### Calling stage() outside a story
 
-`stage()` raises `RuntimeError` immediately if there is no active story in the current context. If you are integrating into library code that may or may not be wrapped in a story, check first:
+`stage()` raises `RuntimeError` immediately if there is no active story in the current context. Two escape hatches are available for library code or background jobs that may run with or without an enclosing story:
+
+**`has_active_story()` probe** — check before entering a stage:
 
 ```python
-from runtime_narrative.context import current_story
-from runtime_narrative import stage
+from runtime_narrative import has_active_story, stage
 
 def my_lib_function():
-    if current_story.get() is not None:
+    if has_active_story():
         with stage("My Lib Work"):
             _do_work()
     else:
         _do_work()
+```
+
+**`stage(optional=True)`** — silently skips instrumentation when no story is active; behaves normally when inside one:
+
+```python
+from runtime_narrative import stage
+
+def my_lib_function():
+    with stage("My Lib Work", optional=True):
+        _do_work()  # instrumented inside a story, plain call outside
 ```
 
 ---
@@ -1045,8 +1082,7 @@ Prints colored, human-readable output to stdout. Uses `typer.secho` for color wh
 `ConsoleRenderer` is the default when no `renderers=` argument is passed to `story()`.
 
 ```python
-from runtime_narrative import story, stage
-from runtime_narrative.renderer.console import ConsoleRenderer
+from runtime_narrative import story, stage, ConsoleRenderer  # top-level import
 
 with story("Import Pipeline", renderers=[ConsoleRenderer()]):
     with stage("Load CSV"):
@@ -1381,6 +1417,18 @@ app.add_middleware(
 ```
 
 All diagnostic kwargs supported by `story()` are forwarded: `diagnostics_config`, `runtime_environment`, `failure_diagnostics`, `allow_rich_in_production`, `app_roots`, `redact_extra`. Requires the `[fastapi]` extra.
+
+**Disabling instrumentation per-request.** Pass a `skip_if` callable to suppress story creation for specific requests — useful for health checks, metrics scrapers, or test clients:
+
+```python
+app.add_middleware(
+    RuntimeNarrativeMiddleware,
+    renderers=[JsonRenderer()],
+    skip_if=lambda req: req.url.path in ("/health", "/metrics", "/readyz"),
+)
+```
+
+When `skip_if(request)` returns `True`, the request passes straight through with no story created and no events emitted.
 
 ### 11.2 Django
 
@@ -2231,7 +2279,17 @@ python myapp.py
 
 ## 20. Event Reference
 
-All events are plain `dataclasses`. They are emitted in a fixed sequence within each story:
+All events are plain `dataclasses` and are part of the stable public API. Import them directly from `runtime_narrative`:
+
+```python
+from runtime_narrative import (
+    StoryStarted, StageStarted, StageCompleted,
+    FailureOccurred, StoryCompleted, LLMAnalysisReady,
+    Event,   # Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted, LLMAnalysisReady]
+)
+```
+
+They are emitted in a fixed sequence within each story:
 
 ```
 StoryStarted → (StageStarted → StageCompleted)* → [FailureOccurred] → StoryCompleted
@@ -2256,6 +2314,7 @@ Emitted when a `stage()` context is entered.
 | Field | Type | Description |
 |---|---|---|
 | `story_id` | `str` | UUID of the enclosing story |
+| `story_name` | `str` | Name of the enclosing story |
 | `stage_name` | `str` | The name passed to `stage(name)` |
 | `timestamp` | `datetime` | Wall-clock time at stage start |
 | `stage_index` | `int` | Zero-based position of this stage in the story (default `0`) |
@@ -2268,6 +2327,7 @@ Emitted when a stage exits without exception (or in `dry_run` mode even if it ra
 | Field | Type | Description |
 |---|---|---|
 | `story_id` | `str` | UUID of the enclosing story |
+| `story_name` | `str` | Name of the enclosing story |
 | `stage_name` | `str` | Stage name |
 | `timestamp` | `datetime` | Wall-clock time at stage exit |
 | `duration_seconds` | `float` | Elapsed time from stage enter to stage exit |
