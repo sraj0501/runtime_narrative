@@ -4,6 +4,21 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.0.1 — 2026-07-01
+
+Patch release addressing six usability issues (#19–#24). No breaking changes.
+
+### Added
+- **`has_active_story() -> bool`** — exported from `runtime_narrative`; cheap `ContextVar` probe returning `True` when a `story()` context is active in the current async/sync context.
+- **`stage(name, optional=True)`** — no-op mode: silently skips stage registration and event emission when no story is active; fully instrumented when inside a story. Useful for library code that may or may not run under a story.
+- **`StoryRuntime.record_failure(exc, *, stage_name=None)`** — async method that emits `FailureOccurred` (with full diagnostics) without owning exception propagation. Enables saga/rollback patterns where errors from compensating actions should be observed without re-raising.
+- **`RuntimeNarrativeMiddleware(skip_if=callable)`** — optional predicate `Callable[[Request], bool]`; when it returns `True` for a request the middleware bypasses story wrapping entirely and calls `call_next` directly. Useful for health-check and readiness probe routes.
+- **`story_name: str` field on `StageStarted` and `StageCompleted`** — populated automatically; renderers no longer need a `story_id → story_name` side table. Defaults to `""` for backward compatibility with code that constructs these events directly.
+- **All event dataclasses + `Event` union type exported at top level** — `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, `LLMAnalysisReady`, and `Event` are now part of the stable public API importable from `runtime_narrative`. Enables `isinstance` dispatch and IDE autocomplete in custom renderers.
+- **`ConsoleRenderer` exported at top level** — `from runtime_narrative import ConsoleRenderer` now works without reaching into the subpackage.
+
+---
+
 ## 1.0.0 — 2026-06-29
 
 ### Added
