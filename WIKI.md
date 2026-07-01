@@ -361,6 +361,8 @@ asyncio.run(saga())
 
 `record_failure` runs the same diagnostics pipeline as the normal `__aexit__` path (lean/rich mode, redaction, traceback capping) and emits `FailureOccurred` via `emit_async`. It never suppresses or re-raises the exception.
 
+Run: `uv run python examples/saga_record_failure.py`
+
 ### Tracking progress
 
 ```python
@@ -515,6 +517,8 @@ def my_lib_function():
     with stage("My Lib Work", optional=True):
         _do_work()  # instrumented inside a story, plain call outside
 ```
+
+Run: `uv run python examples/optional_stage.py`
 
 ---
 
@@ -1430,6 +1434,8 @@ app.add_middleware(
 
 When `skip_if(request)` returns `True`, the request passes straight through with no story created and no events emitted.
 
+Run: `uv run python examples/middleware_skip_if.py`
+
 ### 11.2 Django
 
 Two middleware classes are provided: an async ASGI variant and a sync WSGI variant. Both follow the same story naming convention (`"GET /path"`, `"POST /path"`).
@@ -2333,6 +2339,8 @@ Emitted when a stage exits without exception (or in `dry_run` mode even if it ra
 | `duration_seconds` | `float` | Elapsed time from stage enter to stage exit |
 | `stage_index` | `int` | Zero-based position (default `0`) |
 | `parent_stage_name` | `str \| None` | Name of the enclosing stage, or `None` |
+
+`story_name` on stage events means a renderer can filter by story without tracking a `story_id → story_name` side table populated from `StoryStarted`/`StoryCompleted`. Run: `uv run python examples/stage_story_name.py`
 
 ### FailureOccurred
 
