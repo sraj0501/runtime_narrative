@@ -1104,7 +1104,9 @@ with story("Import Pipeline", renderers=[ConsoleRenderer()]):
 `ConsoleRenderer(*, log_renderer=None, level_icons=None)`:
 
 - `log_renderer` — a callable `(logger, name, event_dict) -> str` used to format `LogRecorded` lines. Defaults to `structlog.dev.ConsoleRenderer()` (its own default style) when the `structlog` extra is installed; a plain built-in format otherwise. Pass any structlog renderer/processor, or your own callable, for a fully custom style.
-- `level_icons` — `dict[str, str]` mapping a lowercase level name to a string prepended to the message (e.g. an emoji or short tag). Empty by default.
+- `level_icons` — `dict[str, str]` mapping a lowercase level name to a string prepended to the message (e.g. an emoji or short tag). Empty by default. Any character not representable on the terminal's encoding (common on Windows `cp1252` consoles) is substituted rather than crashing the renderer, with or without the `console` extra installed.
+
+Color and the story/stage glyphs (`▶`/`✔`/`❌`, falling back to `>`/`[ok]`/`[FAIL]` on non-UTF-8 terminals) are always on — there's no configuration needed to get colorful success/failure output, and no constructor option to change those specific glyphs today. `level_icons` is the supported way to add your own emoji/markers, scoped to `LogRecorded` lines. Run: `uv run python examples/colorful_errors_and_emojis.py`
 
 ### 10.1a FilteredRenderer
 
@@ -2553,3 +2555,5 @@ renderers = [
 ```
 
 Run: `uv run python examples/structured_log_routing.py`
+
+For a combined look at colorful failure output plus emoji `level_icons` across every log level, run: `uv run python examples/colorful_errors_and_emojis.py`

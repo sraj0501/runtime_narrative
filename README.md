@@ -214,6 +214,7 @@ Every script under `examples/` is runnable as-is: `uv run python examples/<name>
 | `sqlite_persistence.py` | `SqliteStoryRenderer` + the `runtime-narrative` CLI |
 | `otel_tracing.py` | `OtelRenderer`, `OtelLogRenderer`, `OtelMetricsRenderer` |
 | `alert_routing.py` | `AlertRoutingRenderer` — async webhook fan-out |
+| `colorful_errors_and_emojis.py` | `ConsoleRenderer`'s built-in color + `level_icons` emoji across log levels and a failure |
 
 **Framework integrations and concurrency**
 | Script | Demonstrates |

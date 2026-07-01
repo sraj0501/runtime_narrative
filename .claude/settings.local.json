@@ -37,7 +37,8 @@
       "Bash(grep *)",
       "Bash(curl -s https://pypi.org/pypi/runtime-narrative/json)",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest version:', d['info']['version']\\)\")",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git remote *)"
     ],
     "deny": [
       "Bash(git push origin main*)",
