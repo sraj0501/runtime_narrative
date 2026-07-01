@@ -35,3 +35,9 @@ htmlcov/
 
 # Logs
 *.log
+
+# Data
+*.db
+
+# Claude Settings
+.claude/
