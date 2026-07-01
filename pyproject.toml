@@ -84,13 +84,17 @@ packages = ["runtime_narrative", "runtime_narrative.renderer", "runtime_narrativ
 [dependency-groups]
 dev = [
     "build>=1.4.0",
+    "fastapi>=0.100.0",
     "httpx>=0.27.0",
     "opentelemetry-api>=1.20.0",
     "opentelemetry-sdk>=1.20.0",
     "prometheus-client>=0.19.0",
+    "pydantic>=2.0.0",
     "pytest>=8.0.0",
     "starlette>=0.27.0",
     "twine>=6.2.0",
+    "typer>=0.9.0",
+    "uvicorn>=0.23.0",
 ]
 
 [tool.pytest.ini_options]

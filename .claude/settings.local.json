@@ -38,7 +38,12 @@
       "Bash(curl -s https://pypi.org/pypi/runtime-narrative/json)",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest version:', d['info']['version']\\)\")",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(echo \"---exit $?---\")",
+      "Bash(uv pip *)",
+      "Bash(yes \"\")",
+      "Bash(tail -5 /tmp_demo_output.txt)",
+      "Bash(grep -c \"Traceback\" /tmp_demo_output.txt)"
     ],
     "deny": [
       "Bash(git push origin main*)",
