@@ -29,6 +29,11 @@ Items within each phase are roughly priority-ordered. Phases are sequential in i
   - `OtelRenderer` — maps narrative events to OpenTelemetry spans; `exclude_stages` and `min_duration_ms` filtering params
   - `PrometheusRenderer` — four metrics: story/stage duration histograms, failure and total counters
   - `StageStarted` / `StageCompleted` now carry `stage_index` and `parent_stage_name` for nested stage tracking
+- **Structured log fields and custom renderer styling** (`v1.2.0`)
+  - `LogRecorded.fields` — captures `extra={...}` from logging calls
+  - `structlog` optional extra — richer default `ConsoleRenderer` style for `LogRecorded`
+  - `ConsoleRenderer(log_renderer=..., level_icons=...)` — custom formatting/icons per level
+  - `FilteredRenderer(predicate, renderer)` — route story families to different styles/destinations
 - **Sub-story tracing and log capture** (`v1.1.0`)
   - `story()` nested inside an active `story()` auto-links as a sub-story: inherits `renderers`/`diagnostics_config`/`failure_analyzer`, sets `parent_story_id`/`root_story_id`
   - `StoryCompleted.duration_seconds`
@@ -177,6 +182,15 @@ runtime-narrative story <story_id>
 ---
 
 ## Changelog
+
+### 1.2.0
+
+**New features — Structured log fields and custom renderer styling**
+
+- `LogRecorded.fields` — captures `extra={...}` from a logging call, excluding standard `LogRecord` attributes.
+- `structlog` optional extra — `ConsoleRenderer` renders `LogRecorded` with structlog's default console style (colored level, timestamp, key=value fields) when installed; plain fallback otherwise.
+- `ConsoleRenderer(log_renderer=..., level_icons=...)` — pluggable renderer callable and per-level message prefix, both no-op by default.
+- `FilteredRenderer(predicate, renderer)` — wraps any renderer, forwarding events only when the predicate matches; lets different story families (e.g. `story_name.startswith("GET ")`) render with a different style or destination.
 
 ### 1.1.0
 

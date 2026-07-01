@@ -1,4 +1,4 @@
-"""Demonstrates has_active_story() and stage(optional=True) (v1.0.1).
+"""Demonstrates has_active_story() and stage(optional=True).
 
 Shared library code often can't know whether it's being called from inside an
 instrumented request/job or from a background task or unit test where no

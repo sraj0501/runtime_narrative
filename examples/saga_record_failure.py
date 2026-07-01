@@ -1,4 +1,4 @@
-"""Demonstrates StoryRuntime.record_failure() for saga/rollback flows (v1.0.1).
+"""Demonstrates StoryRuntime.record_failure() for saga/rollback flows.
 
 When a compensating action fails inside a manually-driven rollback handler,
 you often don't want that failure to propagate and mark the whole saga as

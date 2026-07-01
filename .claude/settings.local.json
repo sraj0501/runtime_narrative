@@ -27,7 +27,17 @@
       "Bash(git -C D:/git_apps/runtime_narrative status)",
       "Bash(git -C D:/git_apps/runtime_narrative log --oneline -3)",
       "Bash(gh issue *)",
-      "Bash(python -c \"import twine\")"
+      "Bash(python -c \"import twine\")",
+      "Bash(git fetch *)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(/tmp/rn_test_env/Scripts/python.exe -c \"import sys; print\\(sys.prefix\\); print\\(sys.path\\)\")",
+      "Read(//tmp/**)",
+      "Bash(/tmp/rn_test_env/Scripts/python.exe -m pip install --quiet starlette)",
+      "Bash(/tmp/rn_test_env/Scripts/python.exe -c ' *)",
+      "Bash(grep *)",
+      "Bash(curl -s https://pypi.org/pypi/runtime-narrative/json)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('latest version:', d['info']['version']\\)\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [
       "Bash(git push origin main*)",

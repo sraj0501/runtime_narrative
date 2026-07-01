@@ -91,3 +91,27 @@ def test_log_in_substory_carries_root_story_id_of_parent() -> None:
     assert len(events) == 1
     assert events[0].story_id == db_runtime.story_id
     assert events[0].root_story_id == api_runtime.story_id
+
+
+def test_log_extra_fields_are_captured() -> None:
+    cap = CapturingRenderer()
+    handler = NarrativeLogHandler(level=logging.WARNING)
+    logger = _make_logger(handler, "rn.test.fields")
+
+    with story("API", renderers=[cap]):
+        logger.warning("slow query", extra={"order_id": "ORD-42", "duration_ms": 250})
+
+    event = next(e for e in cap.events if e.__class__.__name__ == "LogRecorded")
+    assert event.fields == {"order_id": "ORD-42", "duration_ms": 250}
+
+
+def test_log_without_extra_has_empty_fields() -> None:
+    cap = CapturingRenderer()
+    handler = NarrativeLogHandler(level=logging.WARNING)
+    logger = _make_logger(handler, "rn.test.nofields")
+
+    with story("API", renderers=[cap]):
+        logger.warning("plain message")
+
+    event = next(e for e in cap.events if e.__class__.__name__ == "LogRecorded")
+    assert event.fields == {}

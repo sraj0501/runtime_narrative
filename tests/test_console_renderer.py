@@ -139,6 +139,7 @@ def test_story_started_line_includes_short_id_tag(monkeypatch, capsys) -> None:
 
 def test_log_recorded_renders_with_short_id_and_stage(monkeypatch, capsys) -> None:
     monkeypatch.setattr(console_mod, "typer", None)
+    monkeypatch.setattr(console_mod, "structlog", None)
     r = ConsoleRenderer()
     event = LogRecorded(
         story_id="abcdef1234567890",
@@ -198,3 +199,71 @@ def test_nested_stage_and_substory_lines_are_indented(monkeypatch, capsys) -> No
     assert indent_of[stage_line] > indent_of[story_line]
     assert indent_of[substory_line] > indent_of[stage_line]
     assert indent_of[substage_line] > indent_of[substory_line]
+
+
+# ── structured log rendering (structlog integration, level_icons, fields) ────
+
+def _log_event(**overrides) -> LogRecorded:
+    defaults = dict(
+        story_id="s1", story_name="API", root_story_id="s1", stage_name="Call DB",
+        level="WARNING", logger_name="myapp.db", message="slow query",
+        timestamp=datetime(2024, 6, 1, 12, 0, 0),
+    )
+    defaults.update(overrides)
+    return LogRecorded(**defaults)
+
+
+def test_log_recorded_falls_back_to_plain_style_without_structlog(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    monkeypatch.setattr(console_mod, "structlog", None)
+    r = ConsoleRenderer()
+    r.handle(_log_event(fields={"order_id": "ORD-42"}))
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "slow query" in out
+    assert "order_id='ORD-42'" in out
+
+
+def test_log_recorded_uses_structlog_default_style_when_available(monkeypatch, capsys) -> None:
+    pytest.importorskip("structlog")
+    r = ConsoleRenderer()
+    r.handle(_log_event(fields={"order_id": "ORD-42"}))
+    out = capsys.readouterr().out
+    assert "slow query" in out
+    assert "order_id" in out
+    assert "ORD-42" in out
+    assert "warning" in out.lower()
+
+
+def test_level_icons_prepend_to_message(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    monkeypatch.setattr(console_mod, "structlog", None)
+    r = ConsoleRenderer(level_icons={"warning": "!! "})
+    r.handle(_log_event())
+    out = capsys.readouterr().out
+    assert "!! slow query" in out
+
+
+def test_custom_log_renderer_is_used_verbatim(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    calls = []
+
+    def fake_renderer(logger, name, event_dict):
+        calls.append(event_dict)
+        return f"CUSTOM: {event_dict['event']}"
+
+    r = ConsoleRenderer(log_renderer=fake_renderer)
+    r.handle(_log_event())
+    out = capsys.readouterr().out
+    assert "CUSTOM: slow query" in out
+    assert len(calls) == 1
+    assert calls[0]["stage"] == "Call DB"
+
+
+def test_log_recorded_renders_exc_text_after_structured_line(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    monkeypatch.setattr(console_mod, "structlog", None)
+    r = ConsoleRenderer()
+    r.handle(_log_event(level="ERROR", exc_text="Traceback...\nValueError: boom"))
+    out = capsys.readouterr().out
+    assert "ValueError: boom" in out

@@ -1,4 +1,4 @@
-"""Demonstrates story_name on StageStarted/StageCompleted (v1.0.1).
+"""Demonstrates story_name on StageStarted/StageCompleted.
 
 Stage events now carry the enclosing story's name directly, so a renderer
 that only cares about specific stories (e.g. an audit trail for "ADO" sagas)
