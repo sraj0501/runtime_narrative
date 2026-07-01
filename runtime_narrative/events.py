@@ -104,6 +104,7 @@ class LogRecorded:
     message: str
     timestamp: datetime
     exc_text: str | None = None
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 from typing import Union

@@ -1,4 +1,4 @@
-"""Demonstrates RuntimeNarrativeMiddleware(skip_if=...) (v1.0.1).
+"""Demonstrates RuntimeNarrativeMiddleware(skip_if=...).
 
 skip_if lets you bypass story wrapping entirely for specific requests --
 health checks, readiness probes, metrics scrapers -- without creating a

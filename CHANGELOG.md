@@ -4,6 +4,18 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.2.0 — 2026-07-01
+
+Structured log fields, customizable `ConsoleRenderer` styles, and per-story renderer routing. No breaking changes.
+
+### Added
+- **`LogRecorded.fields: dict[str, Any]`** — caller-supplied `extra={...}` fields from a captured `logging` call (e.g. `logger.warning("cache miss", extra={"order_id": "ORD-42"})`), extracted by `NarrativeLogHandler` and excluded of standard `LogRecord` attributes.
+- **`structlog` optional extra** — when installed, `ConsoleRenderer` renders `LogRecorded` lines using `structlog.dev.ConsoleRenderer`'s own default style (colored level, timestamp, message, `key=value` fields). Falls back to a plain equivalent format with no hard dependency when `structlog` is absent.
+- **`ConsoleRenderer(log_renderer=None, level_icons=None)`** — `log_renderer` accepts any callable matching structlog's renderer signature for full custom styling; `level_icons` maps a lowercase level name to a string prefix (e.g. an emoji) prepended to the message. Both empty/default by default — no behavior change unless configured.
+- **`FilteredRenderer(predicate, renderer)`** (`runtime_narrative.renderer.filter_renderer`) — wraps any renderer, forwarding an event only when `predicate(event)` returns `True`. Since every event type carries `story_name`, this is the general mechanism for routing different story families (e.g. all `"GET ..."` request stories) to their own style or destination. Mirrors the wrapped renderer's sync/async `handle`.
+
+---
+
 ## 1.1.0 — 2026-07-01
 
 Sub-story tracing and stdlib `logging` capture. No breaking changes.

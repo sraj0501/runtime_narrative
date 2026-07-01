@@ -34,6 +34,8 @@ The mental model is deliberately close to how engineers describe work in convers
 
 The library has two usage layers that compose cleanly. The **explicit** layer gives you `story()` and `stage()` context managers — you control exactly what gets a name. The **auto-instrumentation** layer (`@narrative_class`, `instrument_module`, `auto_instrument`) can instrument entire modules or classes with a single line, turning every public method into a stage with zero per-method boilerplate. Both layers produce the same event stream and are compatible with the same renderers.
 
+Stories nest: opening `story()` while another is already active (an API call triggering a DB query, say) auto-links the inner one as a **sub-story** with its own success/failure and duration, without any new API — see [§21](#21-sub-stories-and-log-capture). Existing `logging.warning()`/`.error()` calls can also be folded into the same event stream via `NarrativeLogHandler`, instead of running as a second, disconnected log stream.
+
 The core of the library — story, stage, events, context propagation, and the diagnostics engine — has no required dependencies beyond Python's standard library and `python-dotenv`. Optional extras add colored console output (`typer`), web framework middleware (`starlette`, `django`), observability backends (`opentelemetry-*`, `prometheus-client`), LLM-based failure analysis (`anthropic`), and framework integrations (`celery`, `grpcio`). The async design is pervasive: every context manager supports both `with` and `async with`, every analyzer exposes both `analyze_failure` and `analyze_failure_async`, and async renderers are properly awaited when the story runs asynchronously.
 
 ---
@@ -73,6 +75,7 @@ pip install "runtime-narrative[console,fastapi,otel]"
 | `django` | `django>=3.2` | `RuntimeNarrativeDjangoMiddleware` (ASGI + WSGI) |
 | `celery` | `celery>=5.0` | `NarrativeTask` base class and `connect_narrative` |
 | `grpc` | `grpcio>=1.50.0` | `RuntimeNarrativeInterceptor` and async variant |
+| `structlog` | `structlog>=25.5.0` | Richer default `ConsoleRenderer` style for captured `LogRecorded` events (key=value fields, colored level) |
 | `all` | everything above | Kitchen-sink install for development |
 
 ### With uv
@@ -1097,6 +1100,26 @@ with story("Import Pipeline", renderers=[ConsoleRenderer()]):
     with stage("Validate"):
         assert data
 ```
+
+`ConsoleRenderer(*, log_renderer=None, level_icons=None)`:
+
+- `log_renderer` — a callable `(logger, name, event_dict) -> str` used to format `LogRecorded` lines. Defaults to `structlog.dev.ConsoleRenderer()` (its own default style) when the `structlog` extra is installed; a plain built-in format otherwise. Pass any structlog renderer/processor, or your own callable, for a fully custom style.
+- `level_icons` — `dict[str, str]` mapping a lowercase level name to a string prepended to the message (e.g. an emoji or short tag). Empty by default.
+
+### 10.1a FilteredRenderer
+
+Wraps another renderer, forwarding an event only when `predicate(event)` is `True`. Since every event type carries `story_name`, this is the general mechanism for giving different story families their own style or destination — e.g. all `"GET ..."` request stories rendered differently from everything else:
+
+```python
+from runtime_narrative import ConsoleRenderer, FilteredRenderer
+
+renderers = [
+    FilteredRenderer(lambda e: e.story_name.startswith("GET "), ConsoleRenderer()),
+    FilteredRenderer(lambda e: not e.story_name.startswith("GET "), ConsoleRenderer(level_icons={"error": "X "})),
+]
+```
+
+It mirrors the wrapped renderer's sync/async `handle`, so it composes with `JsonRenderer`, `SqliteStoryRenderer`, `OtelRenderer`, or any custom renderer — not just `ConsoleRenderer`.
 
 ### 10.2 JsonRenderer
 
@@ -2429,6 +2452,7 @@ Emitted by `NarrativeLogHandler` when it captures a stdlib `logging` record whil
 | `message` | `str` | `record.getMessage()` |
 | `timestamp` | `datetime` | `record.created` as a `datetime` |
 | `exc_text` | `str \| None` | Formatted exception text if the record carried `exc_info` |
+| `fields` | `dict[str, Any]` | Caller-supplied `extra={...}` fields from the logging call, minus standard `LogRecord` attributes |
 
 ---
 
@@ -2497,3 +2521,35 @@ Lines are also indented one level per stage/sub-story nesting depth, so the call
 The indent level for each story is tracked per `story_id` internally (base indent for a sub-story = parent's indent + parent's currently-open stage depth + 1) and cleaned up when that story's `StoryCompleted` is handled, so long-running processes don't leak memory per story.
 
 Run: `uv run python examples/logging_bridge.py`
+
+### Structured fields, custom styles, and per-story routing
+
+`extra={...}` passed to a captured logging call becomes `LogRecorded.fields`:
+
+```python
+logger.warning("cache miss", extra={"order_id": "ORD-42"})
+```
+
+With the `structlog` extra installed, `ConsoleRenderer` renders `LogRecorded` using structlog's own default console style — colored level, timestamp, message, then `fields` as `key=value`:
+
+```
+[d9e653] 2026-07-01T16:28:34 [warning  ] cache miss    order_id=ORD-42 stage=Fetch
+```
+
+Without `structlog`, a plain equivalent (`WARNING [stage] logger: message  key=value ...`) is used — no hard dependency either way. Two `ConsoleRenderer` constructor options let you customize further without writing a renderer from scratch:
+
+- `log_renderer=<callable>` — any `(logger, name, event_dict) -> str` callable, e.g. a custom structlog processor/renderer.
+- `level_icons={"warning": "⚠ ", "error": "✗ "}` — prefix string per lowercase level name, prepended to the message. Empty by default.
+
+For routing different story families to different styles or destinations, `FilteredRenderer(predicate, renderer)` wraps any renderer and only forwards events where the predicate returns `True` — every event carries `story_name`, so this covers cases like "all `GET ...` request stories render differently from everything else" (see §10.1a):
+
+```python
+from runtime_narrative import ConsoleRenderer, FilteredRenderer
+
+renderers = [
+    FilteredRenderer(lambda e: e.story_name.startswith("GET "), ConsoleRenderer()),
+    FilteredRenderer(lambda e: not e.story_name.startswith("GET "), ConsoleRenderer(level_icons={"error": "X "})),
+]
+```
+
+Run: `uv run python examples/structured_log_routing.py`

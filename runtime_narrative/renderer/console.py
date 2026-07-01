@@ -4,11 +4,17 @@ import re
 import shutil
 import sys
 import textwrap
+from typing import Any
 
 try:
     import typer
 except ImportError:  # pragma: no cover
     typer = None
+
+try:
+    import structlog
+except ImportError:  # pragma: no cover
+    structlog = None
 
 from . import RenderProtocol
 
@@ -41,7 +47,12 @@ def _stdout_supports_unicode() -> bool:
 
 
 class ConsoleRenderer:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        log_renderer: Any = None,
+        level_icons: dict[str, str] | None = None,
+    ) -> None:
         if _stdout_supports_unicode():
             self._glyph_arrow = "▶"
             self._glyph_check = "✔"
@@ -54,6 +65,22 @@ class ConsoleRenderer:
         self._story_base_indent: dict[str, int] = {}
         # story_id -> stack of currently open stage names, for indent depth
         self._stage_stacks: dict[str, list[str]] = {}
+
+        # LogRecorded rendering: any callable matching structlog's renderer
+        # signature (logger, name, event_dict) -> str. Defaults to structlog's
+        # own default console style (colors auto-disabled on non-TTY) when the
+        # optional `structlog` extra is installed; otherwise falls back to a
+        # plain "LEVEL message key=value ..." line with no external dependency.
+        if log_renderer is not None:
+            self._log_renderer = log_renderer
+        elif structlog is not None:
+            self._log_renderer = structlog.dev.ConsoleRenderer(colors=_stdout_supports_unicode())
+        else:
+            self._log_renderer = None
+        # level (lowercase) -> prefix string (e.g. an emoji), prepended to the
+        # message before rendering. Empty by default -- the default style is
+        # whatever `log_renderer` produces on its own.
+        self._level_icons = level_icons or {}
 
     def _story_base(self, story_id: str) -> int:
         return self._story_base_indent.get(story_id, 0)
@@ -243,14 +270,33 @@ class ConsoleRenderer:
             base = self._story_base(event.story_id)
             indent = self._indent(base + self._open_stage_depth(event.story_id))
             tag, color = self._story_tag(event)
-            level = event.level.upper()
-            noisy = level in ("WARNING", "ERROR", "CRITICAL")
-            level_color = self._failure_color if noisy else color
-            message_color = self._failure_value_color if noisy else None
-            stage_part = f" [{event.stage_name}]" if event.stage_name else ""
             self._secho(f"{indent}{tag} ", fg=color, bold=True, nl=False)
-            self._secho(f"{level}{stage_part} {event.logger_name}: ", fg=level_color, bold=True, nl=False)
-            self._secho(event.message, fg=message_color)
+
+            if self._log_renderer is not None:
+                icon = self._level_icons.get(event.level.lower(), "")
+                event_dict: dict[str, Any] = {
+                    "event": f"{icon}{event.message}" if icon else event.message,
+                    "level": event.level.lower(),
+                    "timestamp": event.timestamp.isoformat(timespec="seconds"),
+                }
+                if event.logger_name:
+                    event_dict["logger"] = event.logger_name
+                if event.stage_name:
+                    event_dict["stage"] = event.stage_name
+                event_dict.update(getattr(event, "fields", {}) or {})
+                self._secho(self._log_renderer(None, event.logger_name, event_dict))
+            else:
+                level = event.level.upper()
+                noisy = level in ("WARNING", "ERROR", "CRITICAL")
+                level_color = self._failure_color if noisy else color
+                message_color = self._failure_value_color if noisy else None
+                stage_part = f" [{event.stage_name}]" if event.stage_name else ""
+                icon = self._level_icons.get(event.level.lower(), "")
+                self._secho(f"{level}{stage_part} {event.logger_name}: ", fg=level_color, bold=True, nl=False)
+                self._secho(f"{icon}{event.message}", fg=message_color)
+                for k, v in (getattr(event, "fields", None) or {}).items():
+                    self._secho(f"  {k}={v!r}", fg=message_color)
+
             if event.exc_text:
                 for line in event.exc_text.splitlines():
                     self._secho(f"  {line}", fg=self._failure_value_color)

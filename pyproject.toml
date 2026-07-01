@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runtime-narrative"
-version = "1.1.0"
+version = "1.2.0"
 description = "Model execution as human-readable stories with lean/rich failure diagnostics and optional LLM analysis"
 readme = "README.md"
 license = "MIT"
@@ -54,6 +54,8 @@ django = ["django>=3.2"]
 celery = ["celery>=5.0"]
 # gRPC server interceptors
 grpc = ["grpcio>=1.50.0"]
+# Structured console rendering for captured logging.* records (NarrativeLogHandler)
+structlog = ["structlog>=25.5.0"]
 # Install everything
 all = [
     "typer>=0.9.0",
@@ -65,6 +67,7 @@ all = [
     "django>=3.2",
     "celery>=5.0",
     "grpcio>=1.50.0",
+    "structlog>=25.5.0",
 ]
 
 [project.scripts]

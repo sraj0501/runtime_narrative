@@ -6,6 +6,21 @@ from datetime import datetime
 from .context import current_stage_stack, current_story
 from .events import LogRecorded
 
+_STANDARD_LOG_RECORD_ATTRS = frozenset(vars(logging.LogRecord("", 0, "", 0, "", (), None)).keys()) | {
+    "message",
+    "asctime",
+}
+
+
+def _extract_extra_fields(record: logging.LogRecord) -> dict[str, object]:
+    """Return caller-supplied `extra={...}` fields from a LogRecord.
+
+    Anything set via `logger.warning("msg", extra={"order_id": "..."})` shows
+    up as extra attributes on the record; standard LogRecord attributes are
+    excluded so only the caller's own fields remain.
+    """
+    return {k: v for k, v in record.__dict__.items() if k not in _STANDARD_LOG_RECORD_ATTRS}
+
 
 class NarrativeLogHandler(logging.Handler):
     """Routes captured stdlib log records into the active story's event pipeline.
@@ -45,6 +60,7 @@ class NarrativeLogHandler(logging.Handler):
                     message=record.getMessage(),
                     timestamp=datetime.fromtimestamp(record.created),
                     exc_text=self.format(record) if record.exc_info else None,
+                    fields=_extract_extra_fields(record),
                 )
             )
         except Exception:
