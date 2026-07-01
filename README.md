@@ -38,6 +38,7 @@ Turn any Python execution into a traceable **story** composed of named **stages*
 - [Alert routing](#alert-routing)
 - [Testing utilities](#testing-utilities)
 - [Custom renderers and analyzers](#custom-renderers-and-analyzers)
+- [Utilities](#utilities)
 - [Environment variables](#environment-variables)
 
 ---
@@ -473,7 +474,7 @@ Renderers never crash a story — if a renderer raises, a warning is printed to 
 Colored terminal output for local development. Falls back to `print` and ASCII glyphs (`>`, `[ok]`, `[FAIL]`) when `typer` is absent or the terminal is not UTF-8 (e.g. Windows cp1252):
 
 ```python
-from runtime_narrative.renderer.console import ConsoleRenderer
+from runtime_narrative import ConsoleRenderer
 
 with story("My Pipeline", renderers=[ConsoleRenderer()]):
     ...
@@ -659,6 +660,16 @@ When `opentelemetry-api` is installed, the middleware automatically extracts inc
 app.add_middleware(
     RuntimeNarrativeMiddleware,
     propagate_trace_context=True,   # default; set False to disable
+)
+```
+
+Use `skip_if` to bypass story wrapping for specific routes (health checks, readiness probes, etc.):
+
+```python
+app.add_middleware(
+    RuntimeNarrativeMiddleware,
+    renderers=[JsonRenderer()],
+    skip_if=lambda req: req.url.path in {"/health", "/ready"},
 )
 ```
 
@@ -929,8 +940,8 @@ Six event types are emitted. Key fields on each:
 | Event | Key fields |
 |---|---|
 | `StoryStarted` | `story_id`, `story_name`, `timestamp` |
-| `StageStarted` | `story_id`, `stage_name`, `timestamp`, `stage_index` (0-based), `parent_stage_name` |
-| `StageCompleted` | `story_id`, `stage_name`, `timestamp`, `duration_seconds`, `stage_index`, `parent_stage_name` |
+| `StageStarted` | `story_id`, `story_name`, `stage_name`, `timestamp`, `stage_index` (0-based), `parent_stage_name` |
+| `StageCompleted` | `story_id`, `story_name`, `stage_name`, `timestamp`, `duration_seconds`, `stage_index`, `parent_stage_name` |
 | `FailureOccurred` | `story_id`, `story_name`, `stage_name`, `error_type`, `error_message`, `filename`, `lineno`, `function`, `traceback_text`, `exception_chain`, `exact_cause`, `stage_timeline`, `progress_percent`, `llm_analysis`, `diagnostics_mode`, `stack_frames`, `source_snippet`, `compressed_stack_summary`, `locals_by_frame` |
 | `StoryCompleted` | `story_id`, `story_name`, `success`, `progress_percent`, `completed_stages`, `total_stages`, `timestamp` |
 | `LLMAnalysisReady` | `story_id`, `story_name`, `stage_name`, `llm_analysis`, `timestamp` |
@@ -963,6 +974,58 @@ class MyAnalyzer:
 
 with story("Import", failure_analyzer=MyAnalyzer()):
     ...
+```
+
+---
+
+## Utilities
+
+### `has_active_story()`
+
+Returns `True` when a `story()` context is active in the current sync or async context. Useful for library code that should behave differently when called under instrumentation:
+
+```python
+from runtime_narrative import has_active_story
+
+def send_email(to: str, body: str) -> None:
+    if has_active_story():
+        # stage() is safe here
+        with stage("Send Email", optional=True):
+            _send(to, body)
+    else:
+        _send(to, body)
+```
+
+### `stage(optional=True)`
+
+When `optional=True`, a `stage()` outside an active story is a no-op — no exception, no events, no tracking. When inside a story it behaves normally. Ideal for shared utilities:
+
+```python
+from runtime_narrative import stage
+
+def enrich_record(record: dict) -> dict:
+    with stage("Enrich Record", optional=True):
+        return _lookup(record)
+    return record   # reached only when no story active
+```
+
+### `StoryRuntime.record_failure()`
+
+Emits a `FailureOccurred` event (with full diagnostics) without owning exception propagation. Use this in saga/rollback flows where a compensating action fails but you want the story to complete successfully:
+
+```python
+async with story("Payment Saga", renderers=[JsonRenderer()]) as runtime:
+    async with stage("Charge Card"):
+        charge_id = await charge(order)
+
+    try:
+        async with stage("Reserve Inventory"):
+            await reserve(order)
+    except InventoryError as exc:
+        async with stage("Refund Charge"):
+            await refund(charge_id)
+        await runtime.record_failure(exc, stage_name="Reserve Inventory")
+        # FailureOccurred emitted; story still completes success=True
 ```
 
 ---
