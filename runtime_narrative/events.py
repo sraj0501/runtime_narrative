@@ -10,6 +10,8 @@ class StoryStarted:
     story_id: str
     story_name: str
     timestamp: datetime
+    parent_story_id: str | None = None
+    root_story_id: str = ""
 
 
 @dataclass
@@ -20,6 +22,7 @@ class StageStarted:
     stage_index: int = 0
     parent_stage_name: str | None = None
     story_name: str = ""
+    root_story_id: str = ""
 
 
 @dataclass
@@ -31,6 +34,7 @@ class StageCompleted:
     stage_index: int = 0
     parent_stage_name: str | None = None
     story_name: str = ""
+    root_story_id: str = ""
 
 
 @dataclass
@@ -62,6 +66,8 @@ class FailureOccurred:
     traceback_truncated: bool = False
     locals_by_frame: dict[str, Any] | None = None
     redaction_removed_keys: int = 0
+    parent_story_id: str | None = None
+    root_story_id: str = ""
 
 
 @dataclass
@@ -73,6 +79,9 @@ class StoryCompleted:
     completed_stages: int
     total_stages: int
     timestamp: datetime
+    duration_seconds: float = 0.0
+    parent_story_id: str | None = None
+    root_story_id: str = ""
 
 
 @dataclass
@@ -84,7 +93,28 @@ class LLMAnalysisReady:
     timestamp: datetime
 
 
+@dataclass
+class LogRecorded:
+    story_id: str
+    story_name: str
+    root_story_id: str
+    stage_name: str
+    level: str
+    logger_name: str
+    message: str
+    timestamp: datetime
+    exc_text: str | None = None
+
+
 from typing import Union
 
-Event = Union[StoryStarted, StageStarted, StageCompleted, FailureOccurred, StoryCompleted, LLMAnalysisReady]
+Event = Union[
+    StoryStarted,
+    StageStarted,
+    StageCompleted,
+    FailureOccurred,
+    StoryCompleted,
+    LLMAnalysisReady,
+    LogRecorded,
+]
 Renderer = Any

@@ -201,6 +201,25 @@ def test_multiple_concurrent_stories() -> None:
         assert span.parent is None
 
 
+# ── sub-story span nesting ────────────────────────────────────────────────────
+
+def test_substory_becomes_child_span_of_parent_story() -> None:
+    exporter, provider = _make_provider()
+    r = OtelRenderer(tracer_provider=provider)
+
+    r.handle(StoryStarted(story_id="s1", story_name="API", timestamp=_ts(0)))
+    r.handle(StoryStarted(story_id="s2", story_name="DB", timestamp=_ts(1), parent_story_id="s1", root_story_id="s1"))
+    r.handle(StoryCompleted(story_id="s2", story_name="DB", success=True, progress_percent=100, completed_stages=0, total_stages=0, timestamp=_ts(2), parent_story_id="s1", root_story_id="s1"))
+    r.handle(StoryCompleted(story_id="s1", story_name="API", success=True, progress_percent=100, completed_stages=0, total_stages=0, timestamp=_ts(3)))
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 2
+    child = next(s for s in spans if s.name == "DB")
+    root = next(s for s in spans if s.name == "API")
+    assert child.parent is not None
+    assert child.parent.span_id == root.get_span_context().span_id
+
+
 # ── attribute truncation ──────────────────────────────────────────────────────
 
 def test_attribute_truncation() -> None:

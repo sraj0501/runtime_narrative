@@ -27,6 +27,9 @@ class StoryRuntime:
     declared_total_stages: int | None = field(default=None, repr=False)
     dry_run: bool = False
     _diag_config: Any = field(default=None, repr=False)
+    parent_story_id: str | None = None
+    root_story_id: str = ""
+    failure_analyzer: Any = field(default=None, repr=False)
 
     def set_total_stages(self, n: int) -> None:
         self.declared_total_stages = n
@@ -70,6 +73,7 @@ class StoryRuntime:
             stage_index=stage.stage_index,
             parent_stage_name=stage.parent_stage_name,
             story_name=self.name,
+            root_story_id=self.root_story_id,
         ))
 
     async def on_stage_started_async(self, stage: StageRecord) -> None:
@@ -80,6 +84,7 @@ class StoryRuntime:
             stage_index=stage.stage_index,
             parent_stage_name=stage.parent_stage_name,
             story_name=self.name,
+            root_story_id=self.root_story_id,
         ))
 
     def on_stage_completed(self, stage: StageRecord) -> None:
@@ -96,6 +101,7 @@ class StoryRuntime:
                 stage_index=stage.stage_index,
                 parent_stage_name=stage.parent_stage_name,
                 story_name=self.name,
+                root_story_id=self.root_story_id,
             )
         )
 
@@ -113,6 +119,7 @@ class StoryRuntime:
                 stage_index=stage.stage_index,
                 parent_stage_name=stage.parent_stage_name,
                 story_name=self.name,
+                root_story_id=self.root_story_id,
             )
         )
 
@@ -165,6 +172,8 @@ class StoryRuntime:
             traceback_truncated=enriched.traceback_truncated,
             locals_by_frame=enriched.locals_by_frame,
             redaction_removed_keys=enriched.redaction_removed_keys,
+            parent_story_id=self.parent_story_id,
+            root_story_id=self.root_story_id,
         ))
 
     def build_stage_timeline(self) -> str:
@@ -227,12 +236,23 @@ class story:
     ):
         from .renderer.console import ConsoleRenderer
 
+        parent_runtime = current_story.get()
+
+        if failure_analyzer is None and parent_runtime is not None:
+            failure_analyzer = parent_runtime.failure_analyzer
         self.failure_analyzer = failure_analyzer
         self.background_analysis = background_analysis
+
+        override_given = any(
+            v is not None
+            for v in (runtime_environment, failure_diagnostics, allow_rich_in_production, app_roots, redact_extra)
+        )
         if diagnostics_config is not None:
             self._diag_config = diagnostics_config
+        elif parent_runtime is not None and not override_given:
+            self._diag_config = parent_runtime._diag_config
         else:
-            base = FailureDiagnosticsConfig.from_env()
+            base = parent_runtime._diag_config if parent_runtime is not None else FailureDiagnosticsConfig.from_env()
             roots: tuple[str, ...] | None = None
             if app_roots is not None:
                 roots = tuple(os.path.abspath(os.path.expanduser(str(p))) for p in app_roots)
@@ -247,13 +267,22 @@ class story:
                 app_roots=roots,
                 redact_extra=extra,
             )
+
+        if renderers is None and parent_runtime is not None:
+            renderers = parent_runtime.renderers
+
         self.runtime = StoryRuntime(
             name=name,
             renderers=renderers or (ConsoleRenderer(),),
             declared_total_stages=total_stages,
             dry_run=dry_run,
             _diag_config=self._diag_config,
+            failure_analyzer=failure_analyzer,
+            parent_story_id=parent_runtime.story_id if parent_runtime is not None else None,
+            root_story_id=parent_runtime.root_story_id if parent_runtime is not None else "",
         )
+        if not self.runtime.root_story_id:
+            self.runtime.root_story_id = self.runtime.story_id
         self._story_token = None
         self._stack_token = None
 
@@ -302,6 +331,8 @@ class story:
             traceback_truncated=traceback_truncated,
             locals_by_frame=locals_by_frame,
             redaction_removed_keys=redaction_removed_keys,
+            parent_story_id=self.runtime.parent_story_id,
+            root_story_id=self.runtime.root_story_id,
         )
 
     def __enter__(self) -> StoryRuntime:
@@ -312,6 +343,8 @@ class story:
                 story_id=self.runtime.story_id,
                 story_name=self.runtime.name,
                 timestamp=datetime.now(),
+                parent_story_id=self.runtime.parent_story_id,
+                root_story_id=self.runtime.root_story_id,
             )
         )
         return self.runtime
@@ -362,6 +395,9 @@ class story:
                 completed_stages=self.runtime.completed_stages,
                 total_stages=self.runtime.total_stages,
                 timestamp=datetime.now(),
+                duration_seconds=(datetime.now() - self.runtime.started_at).total_seconds(),
+                parent_story_id=self.runtime.parent_story_id,
+                root_story_id=self.runtime.root_story_id,
             )
         )
 
@@ -379,6 +415,8 @@ class story:
                 story_id=self.runtime.story_id,
                 story_name=self.runtime.name,
                 timestamp=datetime.now(),
+                parent_story_id=self.runtime.parent_story_id,
+                root_story_id=self.runtime.root_story_id,
             )
         )
         return self.runtime
@@ -448,6 +486,9 @@ class story:
                 completed_stages=self.runtime.completed_stages,
                 total_stages=self.runtime.total_stages,
                 timestamp=datetime.now(),
+                duration_seconds=(datetime.now() - self.runtime.started_at).total_seconds(),
+                parent_story_id=self.runtime.parent_story_id,
+                root_story_id=self.runtime.root_story_id,
             )
         )
 
