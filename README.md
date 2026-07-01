@@ -673,6 +673,8 @@ app.add_middleware(
 )
 ```
 
+Run: `uv run python examples/middleware_skip_if.py`
+
 ### Django
 
 **ASGI (async):**
@@ -946,7 +948,7 @@ Six event types are emitted. Key fields on each:
 | `StoryCompleted` | `story_id`, `story_name`, `success`, `progress_percent`, `completed_stages`, `total_stages`, `timestamp` |
 | `LLMAnalysisReady` | `story_id`, `story_name`, `stage_name`, `llm_analysis`, `timestamp` |
 
-`parent_stage_name` is `None` for top-level stages and set to the enclosing stage name for nested stages.
+`parent_stage_name` is `None` for top-level stages and set to the enclosing stage name for nested stages. `story_name` on stage events lets a renderer filter by story without a `story_id → story_name` side table (run: `uv run python examples/stage_story_name.py`).
 
 ### Custom failure analyzer
 
@@ -1009,6 +1011,8 @@ def enrich_record(record: dict) -> dict:
     return record   # reached only when no story active
 ```
 
+Run: `uv run python examples/optional_stage.py`
+
 ### `StoryRuntime.record_failure()`
 
 Emits a `FailureOccurred` event (with full diagnostics) without owning exception propagation. Use this in saga/rollback flows where a compensating action fails but you want the story to complete successfully:
@@ -1027,6 +1031,8 @@ async with story("Payment Saga", renderers=[JsonRenderer()]) as runtime:
         await runtime.record_failure(exc, stage_name="Reserve Inventory")
         # FailureOccurred emitted; story still completes success=True
 ```
+
+Run: `uv run python examples/saga_record_failure.py`
 
 ---
 

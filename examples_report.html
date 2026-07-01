@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Story: Order Fulfillment</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f6f8fa; color: #24292f; padding: 2rem; }
+.card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: .25rem; }
+h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #57606a; text-transform: uppercase; letter-spacing: .04em; }
+.meta { font-size: .875rem; color: #57606a; margin-top: .25rem; }
+.badge { display: inline-block; padding: .2em .6em; border-radius: 4px; font-size: .8rem; font-weight: 600; letter-spacing: .03em; }
+.badge-success { background: #dafbe1; color: #1a7f37; }
+.badge-fail    { background: #ffebe9; color: #cf222e; }
+.stage-row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid #f0f0f0; }
+.stage-row:last-child { border-bottom: none; }
+.stage-name { flex: 0 0 220px; font-size: .875rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-bar-wrap { flex: 1; background: #f0f0f0; border-radius: 4px; height: 12px; overflow: hidden; }
+.stage-bar { height: 100%; border-radius: 4px; }
+.bar-ok   { background: #2da44e; }
+.bar-fail { background: #cf222e; }
+.stage-dur { flex: 0 0 60px; text-align: right; font-size: .8rem; color: #57606a; }
+.stage-status { flex: 0 0 18px; text-align: center; font-size: .85rem; }
+.failure-block { background: #ffebe9; border: 1px solid #ffcecb; border-radius: 6px; padding: 1rem; }
+.failure-block h3 { font-size: .9rem; font-weight: 600; margin-bottom: .5rem; color: #cf222e; }
+.kv { font-size: .875rem; margin-bottom: .3rem; }
+.kv b { color: #24292f; }
+pre { font-family: ui-monospace, monospace; font-size: .8rem; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: .75rem; overflow-x: auto; white-space: pre-wrap; margin-top: .75rem; }
+.llm-block { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 1rem; margin-top: 1rem; }
+.llm-block h3 { font-size: .9rem; font-weight: 600; margin-bottom: .5rem; color: #0969da; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Order Fulfillment <span class="badge badge-success">SUCCESS</span></h1>
+  <p class="meta">Duration: 0.101s &nbsp;·&nbsp; 5 stage(s)</p>
+</div>
+<div class="card">
+  <h2>Stage Timeline</h2>
+  <div class="stage-row"><span class="stage-name">Validate Order</span><div class="stage-bar-wrap"><div class="stage-bar bar-ok" style="width:33%"></div></div><span class="stage-dur">0.020s</span><span class="stage-status">✓</span></div>
+<div class="stage-row"><span class="stage-name">Reserve Inventory</span><div class="stage-bar-wrap"><div class="stage-bar bar-ok" style="width:83%"></div></div><span class="stage-dur">0.050s</span><span class="stage-status">✓</span></div>
+<div class="stage-row"><span class="stage-name">Queue Shipment</span><div class="stage-bar-wrap"><div class="stage-bar bar-ok" style="width:50%"></div></div><span class="stage-dur">0.030s</span><span class="stage-status">✓</span></div>
+<div class="stage-row"><span class="stage-name">Pull Remote Records</span><div class="stage-bar-wrap"><div class="stage-bar bar-ok" style="width:67%"></div></div><span class="stage-dur">0.041s</span><span class="stage-status">✓</span></div>
+<div class="stage-row"><span class="stage-name">Merge Into Local DB</span><div class="stage-bar-wrap"><div class="stage-bar bar-ok" style="width:100%"></div></div><span class="stage-dur">0.060s</span><span class="stage-status">✓</span></div>
+
+</div>
+
+<div class="card">
+  <h2>Failure Detail</h2>
+  <div class="failure-block">
+    <h3>RuntimeError: SMTP connection refused on port 465 — check firewall rules</h3>
+    <p class="kv"><b>Stage:</b> Send Confirmation Email</p>
+    <p class="kv"><b>Location:</b> D:\git_apps\runtime_narrative\examples\html_report.py:41 (&lt;module&gt;)</p>
+    <p class="kv"><b>Code:</b> <code>raise RuntimeError(&quot;SMTP connection refused on port 465 — check firewall rules&quot;)</code></p>
+    <pre>Traceback (most recent call last):
+  File &quot;D:\git_apps\runtime_narrative\examples\html_report.py&quot;, line 41, in &lt;module&gt;
+    raise RuntimeError(&quot;SMTP connection refused on port 465 — check firewall rules&quot;)
+RuntimeError: SMTP connection refused on port 465 — check firewall rules
+</pre>
+  </div>
+  
+</div>
+</body>
+</html>
