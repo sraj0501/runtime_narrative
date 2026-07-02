@@ -79,6 +79,42 @@ def test_async_failure_reraises() -> None:
         asyncio.run(mw(_FakeDjangoRequest()))
 
 
+class _FakeDjangoResponse:
+    status_code = 200
+
+
+async def _ok_with_status(request):
+    return _FakeDjangoResponse()
+
+
+def _sync_ok_with_status(request):
+    return _FakeDjangoResponse()
+
+
+def test_async_records_status_outcome() -> None:
+    renderer = CapturingRenderer()
+    mw = _django_mod.RuntimeNarrativeDjangoMiddleware(_ok_with_status, renderers=[renderer])
+    asyncio.run(mw(_FakeDjangoRequest()))
+    completed = next(e for e in renderer.events if type(e).__name__ == "StoryCompleted")
+    assert completed.outcome == "200 OK"
+
+
+def test_sync_records_status_outcome() -> None:
+    renderer = CapturingRenderer()
+    mw = _django_mod.RuntimeNarrativeDjangoSyncMiddleware(_sync_ok_with_status, renderers=[renderer])
+    mw(_FakeDjangoRequest())
+    completed = next(e for e in renderer.events if type(e).__name__ == "StoryCompleted")
+    assert completed.outcome == "200 OK"
+
+
+def test_async_response_without_status_leaves_outcome_empty() -> None:
+    renderer = CapturingRenderer()
+    mw = _django_mod.RuntimeNarrativeDjangoMiddleware(_ok, renderers=[renderer])
+    asyncio.run(mw(_FakeDjangoRequest()))
+    completed = next(e for e in renderer.events if type(e).__name__ == "StoryCompleted")
+    assert completed.outcome == ""
+
+
 def test_sync_emits_story_events() -> None:
     renderer = CapturingRenderer()
     mw = _django_mod.RuntimeNarrativeDjangoSyncMiddleware(_sync_ok, renderers=[renderer])

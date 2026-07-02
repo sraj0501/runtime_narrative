@@ -62,3 +62,24 @@ def test_middleware_success_emits_story_completed() -> None:
     r = client.get("/ok")
     assert r.status_code == 200
     assert [type(e).__name__ for e in cap.events][-1] == "StoryCompleted"
+    completed = cap.events[-1]
+    assert completed.outcome == "200 OK"
+
+
+def test_middleware_records_error_status_outcome() -> None:
+    cap = CapturingRenderer()
+
+    async def teapot(_request):
+        return PlainTextResponse("no", status_code=418)
+
+    app = Starlette(
+        routes=[Route("/tea", endpoint=teapot, methods=["GET"])],
+        middleware=[Middleware(RuntimeNarrativeMiddleware, renderers=[cap])],
+    )
+
+    client = TestClient(app)
+    r = client.get("/tea")
+    assert r.status_code == 418
+    completed = cap.events[-1]
+    assert type(completed).__name__ == "StoryCompleted"
+    assert completed.outcome.startswith("418")

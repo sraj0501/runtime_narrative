@@ -151,3 +151,20 @@ def test_json_renderer_story_completed_includes_duration_and_parent_id() -> None
     assert data["duration_seconds"] == 0.42
     assert data["parent_story_id"] == "s1"
     assert data["root_story_id"] == "s1"
+    assert data["outcome"] == ""
+
+
+def test_json_renderer_story_completed_includes_outcome() -> None:
+    from runtime_narrative.events import StoryCompleted
+
+    buf = StringIO()
+    r = JsonRenderer(output=buf)
+    event = StoryCompleted(
+        story_id="s1", story_name="GET /api/call", success=True, progress_percent=100,
+        completed_stages=1, total_stages=1, timestamp=datetime(2024, 6, 1),
+        duration_seconds=0.02, outcome="200 OK",
+    )
+    r.handle(event)
+    buf.seek(0)
+    data = json.loads(buf.read())
+    assert data["outcome"] == "200 OK"

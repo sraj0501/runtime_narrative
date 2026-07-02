@@ -273,3 +273,31 @@ def test_background_analysis_emits_llm_ready() -> None:
     assert "FailureOccurred" in kinds
     assert "StoryCompleted" in kinds
     assert "LLMAnalysisReady" in kinds
+
+
+def test_sync_story_set_outcome_flows_to_story_completed() -> None:
+    cap = CapturingRenderer()
+    with story("GET /api/call", renderers=[cap]) as runtime:
+        runtime.set_outcome("200 OK")
+    completed = next(e for e in cap.events if isinstance(e, StoryCompleted))
+    assert completed.outcome == "200 OK"
+
+
+def test_async_story_set_outcome_flows_to_story_completed() -> None:
+    cap = AsyncCapturingRenderer()
+
+    async def run() -> None:
+        async with story("GET /api/call", renderers=[cap]) as runtime:
+            runtime.set_outcome("201 Created")
+
+    asyncio.run(run())
+    completed = next(e for e in cap.events if isinstance(e, StoryCompleted))
+    assert completed.outcome == "201 Created"
+
+
+def test_story_outcome_defaults_to_empty() -> None:
+    cap = CapturingRenderer()
+    with story("S", renderers=[cap]):
+        pass
+    completed = next(e for e in cap.events if isinstance(e, StoryCompleted))
+    assert completed.outcome == ""
