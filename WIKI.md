@@ -113,7 +113,7 @@ A **story** is a named execution scope. It owns a `StoryRuntime` that tracks all
 
 **Stages** are the named steps inside a story. Each stage emits `StageStarted` on entry and, if it completes without error, `StageCompleted` with its duration. If a stage raises an exception, it marks the stage as failed and lets the exception propagate to the story boundary, where it is caught and turned into `FailureOccurred`. Stages can nest: opening a `stage()` inside another `stage()` records `parent_stage_name` on the inner record.
 
-**Events** are plain dataclasses with no behavior. The six events are: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, and `LLMAnalysisReady`. All six are part of the stable public API and importable directly from `runtime_narrative` — see [Section 20](#20-event-reference). Any renderer that understands these types can do arbitrary things with them.
+**Events** are plain dataclasses with no behavior. The seven events are: `StoryStarted`, `StageStarted`, `StageCompleted`, `FailureOccurred`, `StoryCompleted`, `LLMAnalysisReady`, and `LogRecorded`. All seven are part of the stable public API and importable directly from `runtime_narrative` — see [Section 20](#20-event-reference). Any renderer that understands these types can do arbitrary things with them.
 
 **Renderers** receive every event via their `handle` method. There is no base class and no registration system — any object with `handle(self, event: object) -> None` qualifies. Async renderers declare `async def handle(self, event: object)` and are awaited only when the story itself is running asynchronously (via `async with story(...)`).
 
