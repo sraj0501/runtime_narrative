@@ -152,6 +152,29 @@ Run: `uv run python examples/logging_bridge.py`, `uv run python examples/structu
 
 ---
 
+## Story outcomes: fold the access log into the story line
+
+`StoryCompleted` carries an `outcome` label. The FastAPI/Starlette and Django middlewares set it automatically from the response status, and `ConsoleRenderer` then renders a single self-contained line per request — story name, result, and HTTP status together:
+
+```
+[d7678e] ▶ Story started: GET /api/call
+[d7678e] ▶ Story ended: GET /api/call - SUCCESS (200 OK, 0.023s)
+```
+
+Since the story line now carries everything the server access log would print, you can silence the duplicate line — e.g. `uvicorn.run(app, access_log=False)`.
+
+Outside middleware, set an outcome on any story yourself:
+
+```python
+from runtime_narrative import http_outcome, story
+
+with story("GET /api/call") as runtime:
+    ...
+    runtime.set_outcome(http_outcome(200))   # or any short label, e.g. "3 rows"
+```
+
+---
+
 ## Feature tour
 
 Everything below works the same way in every context (sync/async, decorators, auto-instrumentation, any framework middleware). One line each here; full detail and every parameter in the Wiki.

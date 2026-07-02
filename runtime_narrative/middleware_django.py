@@ -4,6 +4,7 @@ import sys
 from typing import Any, Sequence
 
 from .diagnostics import FailureDiagnosticsConfig
+from .outcome import http_outcome
 from .story import story
 
 try:
@@ -65,8 +66,11 @@ class RuntimeNarrativeDjangoMiddleware:
             allow_rich_in_production=self._allow_rich_in_production,
             app_roots=self._app_roots,
             redact_extra=self._redact_extra,
-        ):
+        ) as runtime:
             response = await self.get_response(request)
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None:
+                runtime.set_outcome(http_outcome(status_code))
         return response
 
 
@@ -114,8 +118,11 @@ class RuntimeNarrativeDjangoSyncMiddleware:
             allow_rich_in_production=self._allow_rich_in_production,
             app_roots=self._app_roots,
             redact_extra=self._redact_extra,
-        ):
+        ) as runtime:
             response = self.get_response(request)
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None:
+                runtime.set_outcome(http_outcome(status_code))
         return response
 
 

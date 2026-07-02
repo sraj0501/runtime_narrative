@@ -30,9 +30,17 @@ class StoryRuntime:
     parent_story_id: str | None = None
     root_story_id: str = ""
     failure_analyzer: Any = field(default=None, repr=False)
+    outcome: str = ""
 
     def set_total_stages(self, n: int) -> None:
         self.declared_total_stages = n
+
+    def set_outcome(self, outcome: str) -> None:
+        """Attach a short result label (e.g. "200 OK") to the StoryCompleted event.
+
+        Sync by design: a pure in-memory setter with no I/O.
+        """
+        self.outcome = outcome
 
     def emit(self, event: object) -> None:
         for renderer in self.renderers:
@@ -398,6 +406,7 @@ class story:
                 duration_seconds=(datetime.now() - self.runtime.started_at).total_seconds(),
                 parent_story_id=self.runtime.parent_story_id,
                 root_story_id=self.runtime.root_story_id,
+                outcome=self.runtime.outcome,
             )
         )
 
@@ -489,6 +498,7 @@ class story:
                 duration_seconds=(datetime.now() - self.runtime.started_at).total_seconds(),
                 parent_story_id=self.runtime.parent_story_id,
                 root_story_id=self.runtime.root_story_id,
+                outcome=self.runtime.outcome,
             )
         )
 

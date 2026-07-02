@@ -129,6 +129,7 @@ class JsonRenderer:
                 "duration_seconds": getattr(event, "duration_seconds", 0.0),
                 "parent_story_id": getattr(event, "parent_story_id", None),
                 "root_story_id": getattr(event, "root_story_id", ""),
+                "outcome": getattr(event, "outcome", ""),
             })
 
 

@@ -8,6 +8,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from .diagnostics import FailureDiagnosticsConfig
+from .outcome import http_outcome
 from .story import story
 
 try:
@@ -25,6 +26,8 @@ def _default_middleware_renderers() -> tuple:
         return (ConsoleRenderer(),)
     from .renderer.json_renderer import JsonRenderer
     return (JsonRenderer(),)
+
+
 
 
 class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
@@ -107,8 +110,9 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
                 allow_rich_in_production=self._allow_rich_in_production,
                 app_roots=self._app_roots,
                 redact_extra=self._redact_extra,
-            ):
+            ) as runtime:
                 response = await call_next(request)
+                runtime.set_outcome(http_outcome(response.status_code))
             return response
         finally:
             if token is not None:

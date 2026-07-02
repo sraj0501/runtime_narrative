@@ -1438,6 +1438,8 @@ async def create_order(payload: dict):
 
 **Auto-renderer selection.** When `renderers` is omitted, the middleware checks `sys.stdout.isatty()`: TTY → `ConsoleRenderer` (local dev), non-TTY → `JsonRenderer` (Docker/CI/production).
 
+**HTTP status in the story line.** The middleware records the response status as the story's `outcome` (`StoryCompleted.outcome`, e.g. `"200 OK"`). `ConsoleRenderer` then emits one self-contained line per request — `[d7678e] ▶ Story ended: GET /api/call - SUCCESS (200 OK, 0.023s)` — which replaces the server access log; run uvicorn with `access_log=False` to avoid the duplicate `INFO: "GET /api/call" 200 OK` line. The same applies to the Django middlewares below. To set an outcome manually, call `runtime.set_outcome(http_outcome(status))` (both importable from `runtime_narrative`) on any story.
+
 **W3C traceparent propagation.** The middleware reads `traceparent`/`tracestate` headers from each incoming request and attaches the extracted OTel context before creating the story span. Story spans become children of the caller's trace when combined with `OtelRenderer`.
 
 ```python
@@ -2426,6 +2428,7 @@ Emitted unconditionally at story exit, after any `FailureOccurred`.
 | `duration_seconds` | `float` | Elapsed time from story enter to story exit |
 | `parent_story_id` | `str \| None` | `story_id` of the enclosing story, or `None` for a root story |
 | `root_story_id` | `str` | `story_id` of the top-most ancestor story |
+| `outcome` | `str` | Short result label set via `StoryRuntime.set_outcome()` (e.g. `"200 OK"`); `""` when unset. The HTTP middlewares set it automatically from the response status (`http_outcome(status_code)`), and `ConsoleRenderer` then renders a self-contained ended line: `Story ended: GET /api/call - SUCCESS (200 OK, 0.023s)` — making a separate server access log (e.g. uvicorn's) redundant, so it can be disabled with `access_log=False`. |
 
 ### LLMAnalysisReady
 

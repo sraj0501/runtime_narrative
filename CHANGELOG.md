@@ -4,6 +4,19 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.3.0 — 2026-07-02
+
+Story outcomes: the HTTP status (or any short result label) now travels on `StoryCompleted`, folding the server access log into the story line. No breaking changes.
+
+### Added
+- **`StoryCompleted.outcome: str`** — short result label, `""` when unset. Included in `JsonRenderer` output.
+- **`StoryRuntime.set_outcome(outcome)`** — attach an outcome to the active story from anywhere inside it.
+- **`http_outcome(status_code)`** (`runtime_narrative.outcome`, exported at top level) — formats `200` → `"200 OK"`, unknown codes fall back to the bare number.
+- **HTTP middlewares set the outcome automatically** — `RuntimeNarrativeMiddleware` (Starlette/FastAPI) and both Django middlewares record `response.status_code` as the story outcome.
+- **`ConsoleRenderer`**: when an outcome is present, the ended line is self-contained — `[d7678e] ▶ Story ended: GET /api/call - SUCCESS (200 OK, 0.023s)` — so a separate access log line (e.g. uvicorn's `INFO: "GET /api/call" 200 OK`) becomes redundant and can be disabled with `access_log=False`. Stories without an outcome render exactly as before.
+
+---
+
 ## 1.2.1 — 2026-07-01
 
 Patch release: a new example plus a Unicode-fallback bug fix. No breaking changes.

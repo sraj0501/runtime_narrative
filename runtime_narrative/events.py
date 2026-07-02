@@ -82,6 +82,7 @@ class StoryCompleted:
     duration_seconds: float = 0.0
     parent_story_id: str | None = None
     root_story_id: str = ""
+    outcome: str = ""
 
 
 @dataclass

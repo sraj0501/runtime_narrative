@@ -425,7 +425,17 @@ class ConsoleRenderer:
             self._secho(f"{indent}{tag} ", fg=tag_color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Story ended: ", fg=color, bold=True, nl=False)
             duration = getattr(event, "duration_seconds", 0.0)
-            self._secho(f"{state} ({duration:.3f}s)", fg=value_color, bold=True)
+            outcome = getattr(event, "outcome", "")
+            if outcome:
+                # Outcome-bearing stories (e.g. HTTP requests) get a self-contained
+                # summary line: name + state + outcome, replacing a separate access log.
+                self._secho(
+                    f"{event.story_name} - {state} ({outcome}, {duration:.3f}s)",
+                    fg=value_color,
+                    bold=True,
+                )
+            else:
+                self._secho(f"{state} ({duration:.3f}s)", fg=value_color, bold=True)
             self._story_base_indent.pop(event.story_id, None)
             self._stage_stacks.pop(event.story_id, None)
 

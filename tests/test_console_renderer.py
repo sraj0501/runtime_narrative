@@ -97,6 +97,42 @@ def test_all_event_types_render_without_typer(monkeypatch, capsys):
     assert "SUCCESS" in out
 
 
+def test_story_completed_with_outcome_renders_combined_line(monkeypatch, capsys):
+    monkeypatch.setattr(console_mod, "typer", None)
+    ts = datetime(2024, 6, 1)
+    r = ConsoleRenderer()
+
+    r.handle(StoryCompleted(
+        story_id="d7678e", story_name="GET /api/call", success=True,
+        progress_percent=100, completed_stages=1, total_stages=1, timestamp=ts,
+        duration_seconds=0.023, outcome="200 OK",
+    ))
+
+    out = capsys.readouterr().out
+    # One self-contained line: name, state, and HTTP outcome together.
+    line = next(l for l in out.splitlines() if "Story ended" in l)
+    assert "GET /api/call" in line
+    assert "SUCCESS" in line
+    assert "200 OK" in line
+
+
+def test_story_completed_without_outcome_keeps_legacy_line(monkeypatch, capsys):
+    monkeypatch.setattr(console_mod, "typer", None)
+    ts = datetime(2024, 6, 1)
+    r = ConsoleRenderer()
+
+    r.handle(StoryCompleted(
+        story_id="s1", story_name="My Story", success=True,
+        progress_percent=100, completed_stages=1, total_stages=1, timestamp=ts,
+        duration_seconds=0.023,
+    ))
+
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if "Story ended" in l)
+    assert "My Story" not in line
+    assert "SUCCESS (0.023s)" in line
+
+
 def test_failure_event_renders_without_typer(monkeypatch, capsys):
     monkeypatch.setattr(console_mod, "typer", None)
 
