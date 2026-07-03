@@ -13,6 +13,10 @@ All notable changes to `runtime-narrative` are documented here.
 - **`StoryStarted.module` / `StageStarted.module`** — the module that opened the story/stage, captured with a single `sys._getframe(1)` lookup (no stack walking, no source-file reads, unlike `inspect.stack()`) at `story()`/`stage()` construction time. Both accept an explicit `module=` override for cases where auto-detection would point at a wrapper instead of the real call site; `@runtime_narrative_story`/`@runtime_narrative_stage` pass `func.__module__` for this reason, so decorated stories/stages report the decorated function's module rather than `runtime_narrative.decorators`. `JsonRenderer` includes the field for full-fidelity machine consumption.
 - **`ConsoleRenderer` module display** — shown once on a `Story started` line, and on a `Stage started` line only when it differs from the *previous* stage's module in that story — a run of same-module stages doesn't repeat the tag, but a genuine cross-module transition is visible. Empty/undetected modules render nothing extra.
 
+---
+
+## 1.4.0 — 2026-07-03
+
 Rich, human-readable output can now be written to a file (not just stdout), auto-instrumentation entry points can be configured via environment variable to write it there automatically alongside the existing JSON stream, and a new renderer collapses repeated polling-style stages so they no longer flood the log. No breaking changes.
 
 ### Added

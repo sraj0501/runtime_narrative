@@ -44,6 +44,21 @@ Items within each phase are roughly priority-ordered. Phases are sequential in i
   - `OtelLogRenderer` — all 6 lifecycle events as OTel log records (INFO/DEBUG/ERROR); correlates trace/span IDs from ambient context
   - `OtelMetricsRenderer` — 4 OTel instruments: `narrative.stage.duration`, `narrative.story.duration`, `narrative.story.failures`, `narrative.llm.analysis_latency`
   - `RuntimeNarrativeMiddleware` extracts W3C `traceparent`/`tracestate` headers; story spans become children of upstream traces
+- **Structured log fields and custom renderer styling** (`v1.2.0`)
+  - `LogRecorded.fields` — captures `extra={...}` from logging calls
+  - `structlog` optional extra — richer default `ConsoleRenderer` style for `LogRecorded`
+  - `ConsoleRenderer(log_renderer=..., level_icons=...)` — custom formatting/icons per level
+  - `FilteredRenderer(predicate, renderer)` — route story families to different styles/destinations
+- **Story outcomes** (`v1.3.0`)
+  - `StoryCompleted.outcome` + `StoryRuntime.set_outcome()` + `http_outcome()` — fold the HTTP status (or any short result label) into the story line
+  - FastAPI/Starlette and Django middlewares set the outcome automatically from the response status
+- **Rich logs to file, env-driven defaults, and polling coalescence** (`v1.4.0`)
+  - `ConsoleRenderer(output=...)` — write rich, human-readable output to any file-like object, not just stdout
+  - `RUNTIME_NARRATIVE_RICH_LOG_FILE` / `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` — env-driven file logging for every auto-instrumentation entry point, via a shared `renderer_defaults.default_renderers()`
+  - `CoalescingRenderer` — collapses repeated back-to-back polling-style stages into one summary line
+- **Timestamps and per-module tags** (`v1.5.0`)
+  - Every `ConsoleRenderer` line is timestamped
+  - `StoryStarted.module` / `StageStarted.module` — auto-detected calling module, shown on change only, so multi-module workflows stay traceable without overcrowding the screen
 
 ---
 
@@ -182,6 +197,36 @@ runtime-narrative story <story_id>
 ---
 
 ## Changelog
+
+### 1.5.0
+
+**New features — Timestamps and per-module tags**
+
+- Every `ConsoleRenderer` line now shows a `YYYY-MM-DD HH:MM:SS.mmm` timestamp from the event's own `.timestamp`.
+- `StoryStarted.module` / `StageStarted.module` — the module that opened the story/stage, auto-detected via a single `sys._getframe(1)` lookup (no stack walking) at construction time, with an explicit `module=` override for wrappers. `@runtime_narrative_story`/`@runtime_narrative_stage` pass `func.__module__` so decorated call sites report correctly.
+- `ConsoleRenderer` shows the module once on `Story started`, and on `Stage started` only when it differs from the previous stage's module in that story — visible on genuine cross-module transitions without repeating on every same-module line.
+
+### 1.4.0
+
+**New features — Rich logs to file, env-driven defaults, and polling coalescence**
+
+- `ConsoleRenderer(output=None)` — accepts any file-like object; defaults to `sys.stdout`. Unicode-vs-ASCII glyph selection follows the given stream's encoding; output is flushed after every line.
+- `RUNTIME_NARRATIVE_RICH_LOG_FILE` / `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` — new env vars read by a shared `renderer_defaults.default_renderers()` now used by every auto-instrumentation entry point (FastAPI/Starlette middleware, both Django middlewares, Celery, both gRPC interceptors) whenever `renderers=` is omitted.
+- `CoalescingRenderer` — wraps another renderer and collapses a run of identical back-to-back stages (e.g. a status-polling loop) into one summary line with total call count and total time, instead of flooding the log with one pair per iteration.
+
+### 1.3.0
+
+**New features — Story outcomes**
+
+- `StoryCompleted.outcome` + `StoryRuntime.set_outcome()` — attach a short result label (e.g. an HTTP status) to a story from anywhere inside it.
+- `http_outcome(status_code)` — formats `200` → `"200 OK"`.
+- FastAPI/Starlette and Django middlewares set the outcome automatically from `response.status_code`; `ConsoleRenderer` folds it into a self-contained `Story ended` line so a separate access-log line becomes redundant.
+
+### 1.2.1
+
+**Fix**
+
+- `ConsoleRenderer`'s `typer`-absent fallback now handles `UnicodeEncodeError` the same way the `typer.secho` path does, so a `level_icons` emoji no longer silently drops a line on a non-UTF-8 terminal without the `console` extra installed.
 
 ### 1.2.0
 
