@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sys
 from typing import Any, Sequence
 
+from .renderer_defaults import default_renderers
 from .story import story
 
 try:
@@ -13,14 +13,6 @@ except ImportError:
     _celery = None  # type: ignore[assignment]
     _CELERY_AVAILABLE = False
     _TaskBase = object
-
-
-def _default_renderers() -> tuple:
-    if getattr(sys.stdout, "isatty", lambda: False)():
-        from .renderer.console import ConsoleRenderer
-        return (ConsoleRenderer(),)
-    from .renderer.json_renderer import JsonRenderer
-    return (JsonRenderer(),)
 
 
 class NarrativeTask(_TaskBase):  # type: ignore[valid-type,misc]
@@ -47,7 +39,7 @@ class NarrativeTask(_TaskBase):  # type: ignore[valid-type,misc]
         request = getattr(self, "request", None)
         task_id = getattr(request, "id", None) or "unknown"
         story_name = f"{self.name} [task_id={task_id}]"
-        renderers = self.narrative_renderers if self.narrative_renderers is not None else _default_renderers()
+        renderers = self.narrative_renderers if self.narrative_renderers is not None else default_renderers()
         with story(
             story_name,
             renderers=renderers,

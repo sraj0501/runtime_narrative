@@ -1085,7 +1085,7 @@ async with story("My Pipeline", renderers=[RendererA(), RendererB()]):
 
 ### 10.1 ConsoleRenderer
 
-Prints colored, human-readable output to stdout. Uses `typer.secho` for color when the `console` extra is installed; falls back to plain `print` otherwise. Automatically substitutes ASCII glyphs (`>`, `[ok]`, `[FAIL]`) for Unicode ones on non-UTF-8 terminals. Handles all seven events (including `LogRecorded`).
+Prints colored, human-readable output to stdout by default. Uses `typer.secho` for color when the `console` extra is installed; falls back to plain `print` otherwise. Automatically substitutes ASCII glyphs (`>`, `[ok]`, `[FAIL]`) for Unicode ones on non-UTF-8 terminals or output streams. Handles all seven events (including `LogRecorded`).
 
 `ConsoleRenderer` is the default when no `renderers=` argument is passed to `story()`.
 
@@ -1101,10 +1101,20 @@ with story("Import Pipeline", renderers=[ConsoleRenderer()]):
         assert data
 ```
 
-`ConsoleRenderer(*, log_renderer=None, level_icons=None)`:
+`ConsoleRenderer(*, log_renderer=None, level_icons=None, output=None)`:
 
 - `log_renderer` — a callable `(logger, name, event_dict) -> str` used to format `LogRecorded` lines. Defaults to `structlog.dev.ConsoleRenderer()` (its own default style) when the `structlog` extra is installed; a plain built-in format otherwise. Pass any structlog renderer/processor, or your own callable, for a fully custom style.
 - `level_icons` — `dict[str, str]` mapping a lowercase level name to a string prepended to the message (e.g. an emoji or short tag). Empty by default. Any character not representable on the terminal's encoding (common on Windows `cp1252` consoles) is substituted rather than crashing the renderer, with or without the `console` extra installed.
+- `output` — any file-like object with a `write` method. Defaults to `sys.stdout`. Pass an open file to send the same human-readable output there instead of the terminal:
+
+```python
+with open("app.log", "a", encoding="utf-8") as log_file:
+    with story("Import Pipeline", renderers=[ConsoleRenderer(output=log_file)]):
+        with stage("Load CSV"):
+            data = ["alice", "bob"]
+```
+
+`typer`/`click` auto-detect that a plain file isn't a terminal and strip ANSI color codes, so a file written this way is clean text. Unicode-vs-ASCII glyph selection is also re-evaluated against the given `output`'s encoding rather than the terminal's. Output is flushed after every line, so the file reflects state up to the moment of a crash rather than sitting in an unflushed buffer. For structured, machine-readable file logging (NDJSON), use [`JsonRenderer`](#102-jsonrenderer) instead — pass both renderers together to get a human-readable file and a JSON file at once.
 
 Color and the story/stage glyphs (`▶`/`✔`/`❌`, falling back to `>`/`[ok]`/`[FAIL]` on non-UTF-8 terminals) are always on — there's no configuration needed to get colorful success/failure output, and no constructor option to change those specific glyphs today. `level_icons` is the supported way to add your own emoji/markers, scoped to `LogRecorded` lines. Run: `uv run python examples/colorful_errors_and_emojis.py`
 
@@ -1122,6 +1132,30 @@ renderers = [
 ```
 
 It mirrors the wrapped renderer's sync/async `handle`, so it composes with `JsonRenderer`, `SqliteStoryRenderer`, `OtelRenderer`, or any custom renderer — not just `ConsoleRenderer`.
+
+### 10.1b CoalescingRenderer
+
+Wraps another renderer, collapsing a run of identical back-to-back stages — e.g. a status-polling loop that runs `with stage("Check Pipeline Status")` every couple of seconds inside one long-running story — into a single summary line instead of flooding the log with one `StageStarted`/`StageCompleted` pair per iteration:
+
+```python
+from runtime_narrative import story, stage, ConsoleRenderer, CoalescingRenderer
+
+with story("Process Upload", renderers=[CoalescingRenderer(ConsoleRenderer())]):
+    with stage("Upload File"):
+        ...
+    while not done:
+        with stage("Check Pipeline Status"):
+            done = check_status()
+        time.sleep(2)
+```
+
+The wrapped renderer still sees the first `threshold` occurrences (default `2`) of a repeated `(story_id, stage_name)` pair in full, so it's visible that polling started. From the next occurrence on, `StageStarted`/`StageCompleted` for that stage are suppressed and accumulated instead of forwarded. As soon as a different event arrives for that story — a different stage, a failure, or the story completing — the run is flushed as one `LogRecorded` summary line reporting the total call count and total time spent, e.g.:
+
+```
+'Check Pipeline Status' repeated 41 more times (43 total) over 84.200s (avg 1.958s/call)
+```
+
+Only wrap the human-facing renderer(s) with this — typically `ConsoleRenderer`. Renderers meant for full-fidelity machine consumption (`JsonRenderer`, `SqliteStoryRenderer`, `OtelRenderer`, and friends) should keep receiving every real event and should not be wrapped. It mirrors the wrapped renderer's sync/async `handle`, the same way `FilteredRenderer` does.
 
 ### 10.2 JsonRenderer
 
@@ -1436,7 +1470,7 @@ async def create_order(payload: dict):
         return {"order_id": 42}
 ```
 
-**Auto-renderer selection.** When `renderers` is omitted, the middleware checks `sys.stdout.isatty()`: TTY → `ConsoleRenderer` (local dev), non-TTY → `JsonRenderer` (Docker/CI/production).
+**Auto-renderer selection.** When `renderers` is omitted, the middleware checks `sys.stdout.isatty()`: TTY → `ConsoleRenderer` (local dev), non-TTY → `JsonRenderer` (Docker/CI/production). Set `RUNTIME_NARRATIVE_RICH_LOG_FILE=<path>` to also write the human-readable narrative to a file (kept alongside the JSON stream in production, or alongside the console in dev — add `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE=0` to send it to the file only). See [§19 Environment Variables](#19-environment-variables).
 
 **HTTP status in the story line.** The middleware records the response status as the story's `outcome` (`StoryCompleted.outcome`, e.g. `"200 OK"`). `ConsoleRenderer` then emits one self-contained line per request — `[d7678e] ▶ Story ended: GET /api/call - SUCCESS (200 OK, 0.023s)` — which replaces the server access log; run uvicorn with `access_log=False` to avoid the duplicate `INFO: "GET /api/call" 200 OK` line. The same applies to the Django middlewares below. To set an outcome manually, call `runtime.set_outcome(http_outcome(status))` (both importable from `runtime_narrative`) on any story.
 
@@ -1508,7 +1542,7 @@ class AppNarrativeMiddleware(RuntimeNarrativeDjangoMiddleware):
         )
 ```
 
-Both classes auto-select `ConsoleRenderer` on TTY, `JsonRenderer` otherwise, when `renderers` is omitted. Requires the `[django]` extra.
+Both classes auto-select `ConsoleRenderer` on TTY, `JsonRenderer` otherwise, when `renderers` is omitted — the same `RUNTIME_NARRATIVE_RICH_LOG_FILE`/`RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` env vars described in §11.1 apply here too, since all auto-instrumentation entry points (HTTP middleware, Django, Celery, gRPC) share one `default_renderers()` selector. Requires the `[django]` extra.
 
 ### 11.3 Celery
 
@@ -2261,6 +2295,13 @@ All environment variables are read by `FailureDiagnosticsConfig.from_env()` at s
 | `RUNTIME_NARRATIVE_MODEL` | model name string | — | Read by `OllamaFailureAnalyzer`, `LLMFailureAnalyzer`, and `AnthropicFailureAnalyzer` to select a model |
 | `RUNTIME_NARRATIVE_ENDPOINT` | URL | — | Custom LLM endpoint for example scripts |
 | `ANTHROPIC_API_KEY` | API key | — | Required by `AnthropicFailureAnalyzer`; raises `ValueError` at construction if absent |
+
+The two variables below are read separately, by `runtime_narrative.renderer_defaults.default_renderers()` — the renderer-selection helper shared by every auto-instrumentation entry point (`RuntimeNarrativeMiddleware`, the Django middleware, `NarrativeTask`/`connect_narrative`, the gRPC interceptors) when `renderers` is not passed explicitly. They have no effect when `renderers=` is set directly.
+
+| Variable | Values | Default | Effect |
+|---|---|---|---|
+| `RUNTIME_NARRATIVE_RICH_LOG_FILE` | file path | — | When set, adds a `ConsoleRenderer` writing the human-readable narrative to this file (append mode, opened once and kept open for the process lifetime), on top of whichever base renderer TTY detection selects |
+| `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` | `1`, `0` | `1` | Only consulted when `RUNTIME_NARRATIVE_RICH_LOG_FILE` is set *and* stdout is a TTY. `0` stops also echoing the narrative to the terminal, so it goes to the file only |
 
 ### Precedence rules
 

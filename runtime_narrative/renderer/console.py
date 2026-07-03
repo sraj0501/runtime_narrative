@@ -4,7 +4,7 @@ import re
 import shutil
 import sys
 import textwrap
-from typing import Any
+from typing import Any, IO
 
 try:
     import typer
@@ -37,13 +37,17 @@ def _color_for_id(story_id: str | None):
     return getattr(typer.colors, _STORY_COLOR_PALETTE[idx], None)
 
 
-def _stdout_supports_unicode() -> bool:
+def _stream_supports_unicode(stream: Any) -> bool:
     try:
-        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        enc = getattr(stream, "encoding", None) or "utf-8"
         "▶✔❌".encode(enc)
         return True
     except (UnicodeEncodeError, LookupError):
         return False
+
+
+def _stdout_supports_unicode() -> bool:
+    return _stream_supports_unicode(sys.stdout)
 
 
 class ConsoleRenderer:
@@ -52,8 +56,15 @@ class ConsoleRenderer:
         *,
         log_renderer: Any = None,
         level_icons: dict[str, str] | None = None,
+        output: IO[str] | None = None,
     ) -> None:
-        if _stdout_supports_unicode():
+        # Destination stream for all rendered output. Defaults to stdout (the
+        # historical behavior); pass any writable file-like object -- e.g. an
+        # open log file -- to send output there instead. typer/click auto-detect
+        # non-tty streams and strip ANSI color codes, so file output is plain text.
+        self._output: IO[str] = output if output is not None else sys.stdout
+        unicode_ok = _stdout_supports_unicode() if output is None else _stream_supports_unicode(output)
+        if unicode_ok:
             self._glyph_arrow = "▶"
             self._glyph_check = "✔"
             self._glyph_cross = "❌"
@@ -74,7 +85,12 @@ class ConsoleRenderer:
         if log_renderer is not None:
             self._log_renderer = log_renderer
         elif structlog is not None:
-            self._log_renderer = structlog.dev.ConsoleRenderer(colors=_stdout_supports_unicode())
+            # Colors only make sense for an interactive terminal. The default
+            # (stdout) path keeps its historical unicode-based heuristic; an
+            # explicit file-like `output` disables colors unless it reports
+            # isatty() itself, so redirected log files stay free of ANSI codes.
+            use_colors = _stdout_supports_unicode() if output is None else bool(getattr(output, "isatty", lambda: False)())
+            self._log_renderer = structlog.dev.ConsoleRenderer(colors=use_colors)
         else:
             self._log_renderer = None
         # level (lowercase) -> prefix string (e.g. an emoji), prepended to the
@@ -128,22 +144,30 @@ class ConsoleRenderer:
             return getattr(typer.colors, "BRIGHT_GREEN", typer.colors.GREEN)
         return None
 
-    @staticmethod
-    def _secho(text: str, *, fg=None, bold: bool = False, nl: bool = True) -> None:
+    def _secho(self, text: str, *, fg=None, bold: bool = False, nl: bool = True) -> None:
         if typer is None:
             try:
-                print(text, end="\n" if nl else "")
+                print(text, end="\n" if nl else "", file=self._output)
             except UnicodeEncodeError:
-                enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+                enc = getattr(self._output, "encoding", "utf-8") or "utf-8"
                 safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
-                print(safe, end="\n" if nl else "")
+                print(safe, end="\n" if nl else "", file=self._output)
+            self._flush_output()
             return
         try:
-            typer.secho(text, fg=fg, bold=bold, nl=nl)
+            typer.secho(text, fg=fg, bold=bold, nl=nl, file=self._output)
         except UnicodeEncodeError:
-            enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+            enc = getattr(self._output, "encoding", "utf-8") or "utf-8"
             safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
-            typer.secho(safe, fg=fg, bold=bold, nl=nl)
+            typer.secho(safe, fg=fg, bold=bold, nl=nl, file=self._output)
+        self._flush_output()
+
+    def _flush_output(self) -> None:
+        # Flush after every line so a log file reflects state up to the moment
+        # of a crash, rather than being lost in an unflushed buffer.
+        flush = getattr(self._output, "flush", None)
+        if flush is not None:
+            flush()
 
     def _label(self, label: str, value: str, *, label_fg=None, value_fg=None) -> None:
         self._secho(f"{label} ", fg=label_fg, bold=True, nl=False)

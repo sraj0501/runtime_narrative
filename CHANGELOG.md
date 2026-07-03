@@ -4,6 +4,17 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.4.0 — 2026-07-03
+
+Rich, human-readable output can now be written to a file (not just stdout), auto-instrumentation entry points can be configured via environment variable to write it there automatically alongside the existing JSON stream, and a new renderer collapses repeated polling-style stages so they no longer flood the log. No breaking changes.
+
+### Added
+- **`ConsoleRenderer(output=None)`** — accepts any file-like object with a `write` method; defaults to `sys.stdout` as before. `typer`/`click` auto-strip ANSI color codes for non-tty streams, so a file written this way is plain text. Unicode-vs-ASCII glyph selection (`▶`/`✔`/`❌` vs `>`/`[ok]`/`[FAIL]`) is evaluated against the given `output`'s encoding rather than the terminal's, and output is flushed after every line so the file reflects state up to the moment of a crash.
+- **`RUNTIME_NARRATIVE_RICH_LOG_FILE` / `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE`** — new env vars, read by a shared `renderer_defaults.default_renderers()` selector now used by every auto-instrumentation entry point (`RuntimeNarrativeMiddleware`, both Django middlewares, `NarrativeTask`/`connect_narrative`, both gRPC interceptors) whenever `renderers=` is omitted. Setting `RUNTIME_NARRATIVE_RICH_LOG_FILE=<path>` adds a file-backed `ConsoleRenderer` on top of the existing TTY-based selection — so a production process (JSON-only to stdout by default) also gets a rich, troubleshooting-friendly narrative file without losing the JSON stream; `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE=0` additionally suppresses the terminal copy on a TTY, sending the narrative to the file only. This replaces four previously-duplicated copies of the same TTY-detection logic with one shared function.
+- **`CoalescingRenderer`** (`runtime_narrative.renderer.coalescing_renderer`, exported at top level) — wraps another renderer and collapses a run of identical back-to-back stages (e.g. a status-polling loop firing every couple of seconds) into a single summary line reporting the total call count and total time spent, instead of one `StageStarted`/`StageCompleted` pair per iteration. The first `threshold` (default 2) occurrences still render in full. Only wrap human-facing renderers with it — renderers needing full fidelity (`JsonRenderer`, `SqliteStoryRenderer`, OTel renderers) should not be wrapped.
+
+---
+
 ## 1.3.0 — 2026-07-02
 
 Story outcomes: the HTTP status (or any short result label) now travels on `StoryCompleted`, folding the server access log into the story line. No breaking changes.

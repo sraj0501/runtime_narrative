@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import sys
 from typing import Any, Sequence
 
 from .diagnostics import FailureDiagnosticsConfig
 from .outcome import http_outcome
+from .renderer_defaults import default_renderers
 from .story import story
 
 try:
@@ -12,14 +12,6 @@ try:
     _DJANGO_AVAILABLE = True
 except ImportError:
     _DJANGO_AVAILABLE = False
-
-
-def _default_renderers() -> tuple:
-    if getattr(sys.stdout, "isatty", lambda: False)():
-        from .renderer.console import ConsoleRenderer
-        return (ConsoleRenderer(),)
-    from .renderer.json_renderer import JsonRenderer
-    return (JsonRenderer(),)
 
 
 class RuntimeNarrativeDjangoMiddleware:
@@ -45,7 +37,7 @@ class RuntimeNarrativeDjangoMiddleware:
                 "Install it with: pip install django"
             )
         self.get_response = get_response
-        self._renderers = tuple(renderers) if renderers is not None else _default_renderers()
+        self._renderers = tuple(renderers) if renderers is not None else default_renderers()
         self._failure_analyzer = failure_analyzer
         self._diagnostics_config = diagnostics_config
         self._runtime_environment = runtime_environment
@@ -97,7 +89,7 @@ class RuntimeNarrativeDjangoSyncMiddleware:
                 "Install it with: pip install django"
             )
         self.get_response = get_response
-        self._renderers = tuple(renderers) if renderers is not None else _default_renderers()
+        self._renderers = tuple(renderers) if renderers is not None else default_renderers()
         self._failure_analyzer = failure_analyzer
         self._diagnostics_config = diagnostics_config
         self._runtime_environment = runtime_environment
