@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -16,13 +17,23 @@ class StageRecord:
     failed: bool = False
     stage_index: int = 0
     parent_stage_name: str | None = None
+    module: str = ""
 
 
 class stage:
-    def __init__(self, name: str, *, optional: bool = False):
+    def __init__(self, name: str, *, optional: bool = False, module: str | None = None):
         self.name = name
         self.optional = optional
-        self.record = StageRecord(name=name)
+        if module is None:
+            # Cheap caller-frame lookup (no stack walking / source reads, unlike
+            # inspect.stack()) so the console renderer can show which module a
+            # stage came from. Pass `module=` explicitly when stage() is opened
+            # from a wrapper (e.g. a decorator) rather than the real call site.
+            try:
+                module = sys._getframe(1).f_globals.get("__name__", "")
+            except (AttributeError, ValueError):
+                module = ""
+        self.record = StageRecord(name=name, module=module)
 
     def __enter__(self) -> StageRecord:
         story_runtime = current_story.get()

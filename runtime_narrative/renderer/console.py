@@ -76,6 +76,9 @@ class ConsoleRenderer:
         self._story_base_indent: dict[str, int] = {}
         # story_id -> stack of currently open stage names, for indent depth
         self._stage_stacks: dict[str, list[str]] = {}
+        # story_id -> last module shown for that story, so Stage started lines
+        # only repeat the "(module)" tag when it actually changes.
+        self._last_module: dict[str, str] = {}
 
         # LogRecorded rendering: any callable matching structlog's renderer
         # signature (logger, name, event_dict) -> str. Defaults to structlog's
@@ -175,12 +178,14 @@ class ConsoleRenderer:
 
     @staticmethod
     def _story_tag(event: object) -> tuple[str, object]:
-        """Return a "[short_id]" tag for *event* plus a color shared by the whole
-        story family (root + any sub-stories), so concurrent/nested stories can
-        be told apart visually without relying on a tree layout."""
+        """Return a "timestamp [short_id]" tag for *event* plus a color shared by
+        the whole story family (root + any sub-stories), so concurrent/nested
+        stories can be told apart visually without relying on a tree layout."""
         story_id = getattr(event, "story_id", "") or ""
         root_id = getattr(event, "root_story_id", "") or story_id
-        return f"[{_short_id(story_id)}]", _color_for_id(root_id)
+        timestamp = getattr(event, "timestamp", None)
+        ts = timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3] if timestamp is not None else "?"
+        return f"{ts} [{_short_id(story_id)}]", _color_for_id(root_id)
 
     @staticmethod
     def _strip_markdown(text: str) -> str:
@@ -266,7 +271,14 @@ class ConsoleRenderer:
             tag, color = self._story_tag(event)
             self._secho(f"{self._indent(base)}{tag} ", fg=color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Story started: ", fg=self._success_color, bold=True, nl=False)
-            self._secho(event.story_name, fg=self._success_value_color, bold=True)
+            module = getattr(event, "module", "") or ""
+            self._secho(event.story_name, fg=self._success_value_color, bold=True, nl=not module)
+            if module:
+                self._secho(f" ({module})", fg=self._success_value_color)
+            # A fresh story starts its own module-change tracking, so its first
+            # stage always shows its module even if it happens to match a
+            # different, already-finished story that reused this story_id slot.
+            self._last_module[event.story_id] = module
             return
 
         if event_name == "StageStarted":
@@ -277,7 +289,15 @@ class ConsoleRenderer:
             tag, color = self._story_tag(event)
             self._secho(f"{indent}{tag} ", fg=color, bold=True, nl=False)
             self._secho(f"{self._glyph_arrow} Stage started: ", fg=self._success_color, bold=True, nl=False)
-            self._secho(event.stage_name, fg=self._success_value_color)
+            module = getattr(event, "module", "") or ""
+            # Only show "(module)" when it differs from the previous stage's
+            # module for this story, so a run of same-module stages doesn't
+            # repeat the tag on every line.
+            show_module = bool(module) and module != self._last_module.get(event.story_id)
+            self._secho(event.stage_name, fg=self._success_value_color, nl=not show_module)
+            if show_module:
+                self._secho(f" ({module})", fg=self._success_value_color)
+                self._last_module[event.story_id] = module
             return
 
         if event_name == "StageCompleted":
@@ -462,6 +482,7 @@ class ConsoleRenderer:
                 self._secho(f"{state} ({duration:.3f}s)", fg=value_color, bold=True)
             self._story_base_indent.pop(event.story_id, None)
             self._stage_stacks.pop(event.story_id, None)
+            self._last_module.pop(event.story_id, None)
 
 
 __all__ = ["ConsoleRenderer"]

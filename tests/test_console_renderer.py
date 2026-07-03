@@ -354,6 +354,94 @@ def test_output_param_defaults_to_stdout_when_omitted(monkeypatch, capsys) -> No
     assert "My Story" in out
 
 
+def test_timestamp_appears_on_every_line(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    ts = datetime(2026, 7, 3, 12, 3, 41, 208000)
+
+    r.handle(StoryStarted(story_id="s1", story_name="My Story", timestamp=ts))
+    r.handle(StageStarted(story_id="s1", stage_name="Step A", timestamp=ts))
+    r.handle(StageCompleted(story_id="s1", stage_name="Step A", duration_seconds=0.05, timestamp=ts))
+    r.handle(StoryCompleted(
+        story_id="s1", story_name="My Story", success=True,
+        progress_percent=100, completed_stages=1, total_stages=1, timestamp=ts,
+    ))
+
+    out = capsys.readouterr().out
+    expected_ts = "2026-07-03 12:03:41.208"
+    # Every rendered line should carry the same timestamp prefix.
+    lines = [l for l in out.splitlines() if l.strip()]
+    assert lines
+    assert all(expected_ts in l for l in lines)
+
+
+def test_module_shown_on_story_started_when_present(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    r.handle(StoryStarted(
+        story_id="s1", story_name="My Story", timestamp=datetime(2024, 6, 1), module="app.routes.upload",
+    ))
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if "Story started" in l)
+    assert "(app.routes.upload)" in line
+
+
+def test_module_omitted_when_empty(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    r.handle(StoryStarted(story_id="s1", story_name="My Story", timestamp=datetime(2024, 6, 1)))
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if "Story started" in l)
+    assert "(" not in line
+
+
+def test_stage_module_tag_shown_only_on_change(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    ts = datetime(2024, 6, 1)
+
+    r.handle(StoryStarted(story_id="s1", story_name="Process Upload", timestamp=ts, module="app.upload"))
+    r.handle(StageStarted(story_id="s1", stage_name="Validate", timestamp=ts, module="app.validators"))
+    r.handle(StageStarted(story_id="s1", stage_name="Validate Again", timestamp=ts, module="app.validators"))
+    r.handle(StageStarted(story_id="s1", stage_name="Persist", timestamp=ts, module="app.db"))
+
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    validate_line = next(l for l in lines if "Stage started: Validate " in l or l.endswith("Validate"))
+    validate_again_line = next(l for l in lines if "Validate Again" in l)
+    persist_line = next(l for l in lines if "Persist" in l)
+
+    assert "(app.validators)" in validate_line
+    # Same module as the previous stage -- tag suppressed to avoid repetition.
+    assert "(app.validators)" not in validate_again_line
+    # Different module -- tag shown again.
+    assert "(app.db)" in persist_line
+
+
+def test_last_module_state_cleared_on_story_completed(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    ts = datetime(2024, 6, 1)
+
+    r.handle(StoryStarted(story_id="s1", story_name="First", timestamp=ts, module="app.a"))
+    r.handle(StoryCompleted(
+        story_id="s1", story_name="First", success=True,
+        progress_percent=100, completed_stages=0, total_stages=0, timestamp=ts,
+    ))
+    assert "s1" not in r._last_module
+
+    # A new story reusing the same story_id (unlikely in practice, but the
+    # renderer should not carry stale module state across it): its own module
+    # differs from the first stage's module, so the stage tag must still show
+    # -- it would be wrongly suppressed if leftover state from the completed
+    # "First" story (also module="app.a") were still sitting in _last_module.
+    r.handle(StoryStarted(story_id="s1", story_name="Second", timestamp=ts, module=""))
+    r.handle(StageStarted(story_id="s1", stage_name="Step", timestamp=ts, module="app.a"))
+    out = capsys.readouterr().out
+    step_line = next(l for l in out.splitlines() if "Stage started: Step" in l)
+    assert "(app.a)" in step_line
+
+
 def test_unicode_glyphs_selected_per_output_stream_encoding(monkeypatch, tmp_path) -> None:
     """A file opened with an encoding that can't represent the glyphs falls back to
     ASCII, independent of whatever sys.stdout supports."""

@@ -82,6 +82,7 @@ class StoryRuntime:
             parent_stage_name=stage.parent_stage_name,
             story_name=self.name,
             root_story_id=self.root_story_id,
+            module=stage.module,
         ))
 
     async def on_stage_started_async(self, stage: StageRecord) -> None:
@@ -93,6 +94,7 @@ class StoryRuntime:
             parent_stage_name=stage.parent_stage_name,
             story_name=self.name,
             root_story_id=self.root_story_id,
+            module=stage.module,
         ))
 
     def on_stage_completed(self, stage: StageRecord) -> None:
@@ -241,8 +243,20 @@ class story:
         redact_extra: Sequence[str] | None = None,
         total_stages: int | None = None,
         dry_run: bool = False,
+        module: str | None = None,
     ):
         from .renderer.console import ConsoleRenderer
+
+        if module is None:
+            # Cheap caller-frame lookup (no stack walking / source reads, unlike
+            # inspect.stack()) so the console renderer can show which module opened
+            # this story. Pass `module=` explicitly when story() is opened from a
+            # wrapper (e.g. a decorator) rather than the real call site.
+            try:
+                module = sys._getframe(1).f_globals.get("__name__", "")
+            except (AttributeError, ValueError):
+                module = ""
+        self._module = module
 
         parent_runtime = current_story.get()
 
@@ -353,6 +367,7 @@ class story:
                 timestamp=datetime.now(),
                 parent_story_id=self.runtime.parent_story_id,
                 root_story_id=self.runtime.root_story_id,
+                module=self._module,
             )
         )
         return self.runtime
@@ -426,6 +441,7 @@ class story:
                 timestamp=datetime.now(),
                 parent_story_id=self.runtime.parent_story_id,
                 root_story_id=self.runtime.root_story_id,
+                module=self._module,
             )
         )
         return self.runtime
