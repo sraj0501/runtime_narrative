@@ -187,6 +187,10 @@ runtime-narrative story <story_id>
 
 ---
 
+## Next up
+
+- **Redact secrets in captured log fields, not just failure locals.** Redaction (`redact_extra`/`redact_patterns`/`redact_callback`, shipped `v1.0.0`, §6.4) today only scrubs local variables captured during rich failure diagnostics. It does not touch `LogRecorded.fields` — the `extra={...}` dict on a captured `logging.warning()`/`.error()` call — so an API key or token passed there (e.g. `logger.info("token refreshed", extra={"api_key": "sk-..."})`) is rendered and persisted verbatim by `ConsoleRenderer`, `JsonRenderer`, and any other renderer. The fix is to apply the same redaction keyword/pattern/callback machinery to `NarrativeLogHandler`'s field extraction (or at render time) so masking is consistent everywhere secrets could leak, not just in stack-trace locals. Not yet scheduled — flagged for a future release.
+
 ## What will not be built
 
 - **Code generation or automated patching.** The library tells you *what* to fix and *why*. Applying the fix is always a human decision.
