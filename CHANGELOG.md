@@ -4,6 +4,19 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.5.1 — 2026-07-03
+
+Two small correctness fixes found while building a new example, plus the example itself. No breaking changes.
+
+### Added
+- **`examples/fastapi_ugly_traceback_demo.py`** — the same deeply nested async bug (FastAPI route → orchestrator → retry-wrapped pricing engine → `asyncio.gather` fan-out → the actual `TypeError`, in `examples/fastapi_app/order_pipeline.py`) run twice: once through a bare FastAPI app with no instrumentation (~35 raw stack frames across Starlette/asyncio internals and app code alike), once through the same route wrapped by `RuntimeNarrativeMiddleware` with rich diagnostics — one pinpointed line, a source snippet, the stage in progress, and the local variable values that caused it. Adds a `POST /orders/checkout` endpoint to the `examples/fastapi_app` demo.
+
+### Fixed
+- **`_build_exception_chain()`** (`runtime_narrative/failure.py`) followed `current.__cause__ or current.__context__` unconditionally, ignoring `__suppress_context__`. A `raise X from None` (a common pattern in retry wrappers and similar cleanup code) still surfaced the suppressed `__context__` in `exception_chain`/`exact_cause`, disagreeing with what Python's own traceback output shows for the same exception. Now follows `__cause__` unconditionally and `__context__` only when not suppressed, matching `traceback`'s own semantics.
+- **`ConsoleRenderer`**'s rich-locals heading (`frame_N — file:line in func`) hardcoded a literal em-dash instead of going through the existing Unicode/ASCII glyph-selection path used for every other symbol in the renderer. On a non-UTF-8 output stream this degraded to a `�` replacement character rather than a clean ASCII fallback; it now uses `self._glyph_dash` (`—` / `-`) like `_glyph_arrow`/`_glyph_check`/`_glyph_cross`.
+
+---
+
 ## 1.5.0 — 2026-07-03
 
 `ConsoleRenderer` now shows a timestamp on every line and, when known, the calling module — helpful for tracing which part of a multi-module workflow produced a given story or stage without flooding the screen. No breaking changes.

@@ -202,6 +202,14 @@ runtime-narrative story <story_id>
 
 ## Changelog
 
+### 1.5.1
+
+**Fixes — found while building the FastAPI "ugly traceback" example**
+
+- `_build_exception_chain()` now respects `__suppress_context__`, so `raise X from None` no longer leaks a deliberately-hidden `__context__` exception into `exception_chain`/`exact_cause`.
+- `ConsoleRenderer`'s rich-locals heading uses the same Unicode/ASCII glyph-selection path as every other symbol instead of a hardcoded em-dash, so it degrades cleanly on non-UTF-8 streams instead of showing a replacement character.
+- New `examples/fastapi_ugly_traceback_demo.py` + `examples/fastapi_app/order_pipeline.py` — a deliberately deep async bug shown raw (~35 stack frames) vs. through runtime-narrative (one pinpointed line).
+
 ### 1.5.0
 
 **New features — Timestamps and per-module tags**

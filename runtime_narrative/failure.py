@@ -19,12 +19,29 @@ class FailureSummary:
 
 
 def _build_exception_chain(exc: BaseException) -> str:
+    """Walk __cause__/__context__ the same way Python's own traceback module does.
+
+    Explicit chaining (``raise X from Y``) is always followed. Implicit
+    chaining (``__context__``, set automatically when an exception is raised
+    while handling another) is followed *unless* the raiser suppressed it
+    with ``raise X from None`` — ``__suppress_context__`` is exactly that
+    signal. Ignoring it here would surface unrelated exceptions the original
+    author deliberately hid (e.g. cleanup/cancellation noise from a retry
+    wrapper's ``raise last_exc from None``), and the raw traceback wouldn't
+    show them either — so this would silently disagree with Python's own
+    output.
+    """
     parts: list[str] = []
     current: BaseException | None = exc
     depth = 0
     while current is not None and depth < 5:
         parts.append(f"{type(current).__name__}: {current}")
-        current = current.__cause__ or current.__context__
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif not current.__suppress_context__:
+            current = current.__context__
+        else:
+            current = None
         depth += 1
     return " <- ".join(parts)
 

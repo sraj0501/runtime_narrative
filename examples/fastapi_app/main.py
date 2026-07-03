@@ -15,6 +15,7 @@ from runtime_narrative import (
 )
 
 from .db import create_customer, init_db, list_customers
+from .order_pipeline import checkout_order
 
 _model = os.getenv("RUNTIME_NARRATIVE_MODEL")
 _endpoint = os.getenv("RUNTIME_NARRATIVE_ENDPOINT", "http://127.0.0.1:11434/api/generate")
@@ -130,3 +131,18 @@ def _customers_list_response(customers: list) -> dict:
 async def get_customers() -> dict[str, object]:
     customers = _fetch_customers()
     return _customers_list_response(customers)
+
+
+# ── POST /orders/checkout ──────────────────────────────────────────────────────
+# Deliberately deep async pipeline used by examples/fastapi_ugly_traceback_demo.py
+# to contrast a raw Python traceback against runtime-narrative's diagnosis.
+
+class CheckoutRequest(BaseModel):
+    cart: list[dict]
+    promo_code: str
+    payment_method: str
+
+
+@app.post("/orders/checkout")
+async def checkout(payload: CheckoutRequest) -> dict:
+    return await checkout_order(payload.cart, payload.promo_code, payload.payment_method)
