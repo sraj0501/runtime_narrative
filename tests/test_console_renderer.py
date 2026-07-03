@@ -303,3 +303,66 @@ def test_log_recorded_renders_exc_text_after_structured_line(monkeypatch, capsys
     r.handle(_log_event(level="ERROR", exc_text="Traceback...\nValueError: boom"))
     out = capsys.readouterr().out
     assert "ValueError: boom" in out
+
+
+# ── file output (`output=`) ────────────────────────────────────────────────
+
+def test_output_param_writes_to_file_instead_of_stdout(monkeypatch, capsys, tmp_path) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    log_path = tmp_path / "app.log"
+    ts = datetime(2024, 6, 1)
+
+    with open(log_path, "w", encoding="utf-8") as f:
+        r = ConsoleRenderer(output=f)
+        r.handle(StoryStarted(story_id="s1", story_name="My Story", timestamp=ts))
+        r.handle(StoryCompleted(
+            story_id="s1", story_name="My Story", success=True,
+            progress_percent=100, completed_stages=1, total_stages=1, timestamp=ts,
+        ))
+
+    # Nothing leaked to stdout ...
+    assert capsys.readouterr().out == ""
+    # ... and everything landed in the file.
+    contents = log_path.read_text(encoding="utf-8")
+    assert "My Story" in contents
+    assert "SUCCESS" in contents
+
+
+def test_output_param_flushes_after_every_line(monkeypatch, tmp_path) -> None:
+    """Output must be visible on disk immediately, not just after the file is closed,
+    so a log file reflects state up to the moment of a crash."""
+    monkeypatch.setattr(console_mod, "typer", None)
+    log_path = tmp_path / "app.log"
+    ts = datetime(2024, 6, 1)
+
+    f = open(log_path, "w", encoding="utf-8")
+    try:
+        r = ConsoleRenderer(output=f)
+        r.handle(StoryStarted(story_id="s1", story_name="My Story", timestamp=ts))
+        # Read the file via a second handle while the writer is still open.
+        contents = log_path.read_text(encoding="utf-8")
+        assert "My Story" in contents
+    finally:
+        f.close()
+
+
+def test_output_param_defaults_to_stdout_when_omitted(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(console_mod, "typer", None)
+    r = ConsoleRenderer()
+    r.handle(StoryStarted(story_id="s1", story_name="My Story", timestamp=datetime(2024, 6, 1)))
+    out = capsys.readouterr().out
+    assert "My Story" in out
+
+
+def test_unicode_glyphs_selected_per_output_stream_encoding(monkeypatch, tmp_path) -> None:
+    """A file opened with an encoding that can't represent the glyphs falls back to
+    ASCII, independent of whatever sys.stdout supports."""
+    monkeypatch.setattr(console_mod, "typer", None)
+    monkeypatch.setattr(console_mod, "_stdout_supports_unicode", lambda: True)
+    log_path = tmp_path / "app.log"
+
+    with open(log_path, "w", encoding="cp1252") as f:
+        r = ConsoleRenderer(output=f)
+        assert r._glyph_arrow == ">"
+        assert r._glyph_check == "[ok]"
+        assert r._glyph_cross == "[FAIL]"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from typing import Any, Callable, Sequence
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -9,6 +8,7 @@ from starlette.responses import Response
 
 from .diagnostics import FailureDiagnosticsConfig
 from .outcome import http_outcome
+from .renderer_defaults import default_renderers
 from .story import story
 
 try:
@@ -17,17 +17,6 @@ try:
     _OTEL_PROPAGATION_AVAILABLE = True
 except ImportError:
     _OTEL_PROPAGATION_AVAILABLE = False
-
-
-def _default_middleware_renderers() -> tuple:
-    """Return ConsoleRenderer when attached to a real terminal, JsonRenderer otherwise."""
-    if getattr(sys.stdout, "isatty", lambda: False)():
-        from .renderer.console import ConsoleRenderer
-        return (ConsoleRenderer(),)
-    from .renderer.json_renderer import JsonRenderer
-    return (JsonRenderer(),)
-
-
 
 
 class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
@@ -40,6 +29,8 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
     When no ``renderers`` are passed, the middleware auto-selects:
     - ``ConsoleRenderer`` if ``sys.stdout`` is a real TTY (local dev server)
     - ``JsonRenderer`` otherwise (production, Docker, CI — any non-interactive environment)
+    - Set ``RUNTIME_NARRATIVE_RICH_LOG_FILE=<path>`` to also (or instead, combined with
+      ``RUNTIME_NARRATIVE_RICH_LOG_CONSOLE=0``) write the human-readable narrative to a file.
 
     Usage::
 
@@ -79,7 +70,7 @@ class RuntimeNarrativeMiddleware(BaseHTTPMiddleware):
         skip_if: Callable[[Request], bool] | None = None,
     ):
         super().__init__(app)
-        self._renderers = tuple(renderers) if renderers is not None else _default_middleware_renderers()
+        self._renderers = tuple(renderers) if renderers is not None else default_renderers()
         self._failure_analyzer = failure_analyzer
         self._diagnostics_config = diagnostics_config
         self._runtime_environment = runtime_environment

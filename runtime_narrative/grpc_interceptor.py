@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sys
 from typing import Any, Callable, Sequence
 
+from .renderer_defaults import default_renderers
 from .story import story
 
 try:
@@ -24,17 +24,9 @@ except ImportError:
     _AsyncBase = object
 
 
-def _default_renderers() -> tuple:
-    if getattr(sys.stdout, "isatty", lambda: False)():
-        from .renderer.console import ConsoleRenderer
-        return (ConsoleRenderer(),)
-    from .renderer.json_renderer import JsonRenderer
-    return (JsonRenderer(),)
-
-
 def _story_kwargs(interceptor: Any) -> dict:
     return {
-        "renderers": interceptor._renderers or _default_renderers(),
+        "renderers": interceptor._renderers or default_renderers(),
         "failure_analyzer": interceptor._failure_analyzer,
         "diagnostics_config": interceptor._diagnostics_config,
         "runtime_environment": interceptor._runtime_environment,

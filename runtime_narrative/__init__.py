@@ -1,4 +1,4 @@
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 from .analyzers import FailureAnalyzer, LLMFailureAnalyzer, OllamaFailureAnalyzer, DeduplicatingAnalyzer
 from .context import has_active_story
@@ -19,6 +19,7 @@ from .logging_bridge import NarrativeLogHandler
 from .outcome import http_outcome
 from .renderer.console import ConsoleRenderer
 from .renderer.filter_renderer import FilteredRenderer
+from .renderer.coalescing_renderer import CoalescingRenderer
 from .renderer.json_renderer import JsonRenderer, RotatingJsonRenderer
 from .stage import stage
 from .story import story, StoryRuntime
@@ -106,6 +107,7 @@ __all__ = [
     "RuntimeNarrativeMiddleware",
     "ConsoleRenderer",
     "FilteredRenderer",
+    "CoalescingRenderer",
     "JsonRenderer",
     "RotatingJsonRenderer",
     "OtelRenderer",
