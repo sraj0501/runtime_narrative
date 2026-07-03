@@ -175,6 +175,55 @@ with story("GET /api/call") as runtime:
 
 ---
 
+## Rich logs to a file, and no more flooded polling loops
+
+`ConsoleRenderer` writes its colored, human-readable output to any file-like object, not just the terminal — so the same troubleshooting-friendly narrative can land in a log file alongside the structured JSON stream:
+
+```python
+with open("narrative.log.txt", "a", encoding="utf-8") as log_file:
+    with story("Import Pipeline", renderers=[ConsoleRenderer(output=log_file), JsonRenderer("narrative.log")]):
+        ...
+```
+
+Every auto-instrumentation entry point (FastAPI/Starlette middleware, Django middleware, Celery, gRPC interceptors) picks this up automatically via two environment variables, with no code changes:
+
+```bash
+RUNTIME_NARRATIVE_RICH_LOG_FILE=/var/log/app/narrative.log.txt   # rich console output also goes here
+RUNTIME_NARRATIVE_RICH_LOG_CONSOLE=0                             # optional: stop echoing it to the terminal too
+```
+
+Long-running, poll-heavy stages (status checks every couple of seconds during a big upload or pipeline run) no longer flood the log either. `CoalescingRenderer` wraps any other renderer and collapses a run of identical back-to-back stages into one summary line — total call count and total time, not one line per poll:
+
+```python
+from runtime_narrative import ConsoleRenderer, CoalescingRenderer
+
+with story("Process Upload", renderers=[CoalescingRenderer(ConsoleRenderer())]):
+    for _ in range(45):
+        with stage("Check Pipeline Status"):
+            poll()
+```
+
+```
+[abcdef] ▶ Stage started: Check Pipeline Status
+[abcdef] ✔ Stage completed: Check Pipeline Status (2.010s)
+[abcdef] ▶ Stage started: Check Pipeline Status
+[abcdef] ✔ Stage completed: Check Pipeline Status (2.005s)
+[abcdef] 'Check Pipeline Status' repeated 43 more times (45 total) over 90.400s (avg 2.009s/call)
+```
+
+Every `ConsoleRenderer` line also carries a `YYYY-MM-DD HH:MM:SS.mmm` timestamp, and the module that opened a story or stage — auto-detected with a single cheap frame lookup, no stack walking — shown once on `Story started` and again only when a stage transitions to a different module, so multi-module workflows stay traceable without repeating the tag on every line:
+
+```
+2026-07-03 12:03:41.208 [abcdef] ▶ Story started: Process Upload (app.routes.upload)
+2026-07-03 12:03:41.209 [abcdef]   ▶ Stage started: Validate Input (app.validators)
+2026-07-03 12:03:41.210 [abcdef]   ✔ Stage completed: Validate Input (0.001s)
+2026-07-03 12:03:41.211 [abcdef]   ▶ Stage started: Insert Record (app.db)
+```
+
+Run: `uv run python examples/colorful_errors_and_emojis.py` — full reference: [WIKI §10.1](WIKI.md#101-consolerenderer), [§10.1b](WIKI.md#101b-coalescingrenderer)
+
+---
+
 ## Feature tour
 
 Everything below works the same way in every context (sync/async, decorators, auto-instrumentation, any framework middleware). One line each here; full detail and every parameter in the Wiki.
@@ -185,7 +234,7 @@ Everything below works the same way in every context (sync/async, decorators, au
 | Auto-instrumentation | `@narrative_class`, `@no_stage`, `instrument_module()`, `auto_instrument()` — instrument classes/modules with zero call-site changes | [WIKI §8](WIKI.md#8-auto-instrumentation) |
 | Failure diagnostics | Lean/rich modes, production traceback caps, secret redaction, `FailureDiagnosticsConfig` | [WIKI §9](WIKI.md#9-failure-diagnostics) |
 | Failure analyzers | `OllamaFailureAnalyzer`, `LLMFailureAnalyzer`, `AnthropicFailureAnalyzer`, `DeduplicatingAnalyzer`, `background_analysis=True` | [WIKI §9](WIKI.md#9-failure-diagnostics), [§16](WIKI.md#16-background-analysis) |
-| Renderers | `ConsoleRenderer`, `JsonRenderer`/`RotatingJsonRenderer`, `HtmlReportRenderer`, `SqliteStoryRenderer`, `OtelRenderer`/`OtelLogRenderer`/`OtelMetricsRenderer`, `PrometheusRenderer`, `AlertRoutingRenderer`, `FilteredRenderer` | [WIKI §10](WIKI.md#10-renderers) |
+| Renderers | `ConsoleRenderer` (optional file `output=`), `JsonRenderer`/`RotatingJsonRenderer`, `HtmlReportRenderer`, `SqliteStoryRenderer`, `OtelRenderer`/`OtelLogRenderer`/`OtelMetricsRenderer`, `PrometheusRenderer`, `AlertRoutingRenderer`, `FilteredRenderer`, `CoalescingRenderer` | [WIKI §10](WIKI.md#10-renderers) |
 | Framework integrations | FastAPI/Starlette middleware, Django ASGI/WSGI middleware, Celery task base class, gRPC interceptors | [WIKI §11](WIKI.md#11-framework-integrations) |
 | Async task groups | `NarrativeTaskGroup` — concurrent `asyncio` tasks under one shared story | [WIKI §12](WIKI.md#12-async-task-groups) |
 | Persistence & CLI | `SqliteStoryRenderer` + `runtime-narrative failures` / `runtime-narrative story <id>` | [WIKI §13](WIKI.md#13-sqlite-persistence-and-cli) |
@@ -266,6 +315,8 @@ Every script under `examples/` is runnable as-is: `uv run python examples/<name>
 | `RUNTIME_NARRATIVE_ALLOW_RICH_IN_PRODUCTION` | `1`, `true` | off | Bypass production safeguard; allow rich diagnostics in production |
 | `RUNTIME_NARRATIVE_MODEL` | model name string | — | Default model for `AnthropicFailureAnalyzer`; also used by example scripts for `OllamaFailureAnalyzer` / `LLMFailureAnalyzer` |
 | `ANTHROPIC_API_KEY` | API key | — | Required by `AnthropicFailureAnalyzer`; read automatically if `api_key=` is not passed |
+| `RUNTIME_NARRATIVE_RICH_LOG_FILE` | file path | — | Adds a file-backed `ConsoleRenderer` writing rich, human-readable output to this path, on top of whichever renderer TTY detection selects. Read by every auto-instrumentation entry point (FastAPI/Starlette, Django, Celery, gRPC) when `renderers=` is omitted |
+| `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` | `1`, `0` | `1` | With `RUNTIME_NARRATIVE_RICH_LOG_FILE` set and stdout a TTY, `0` suppresses the terminal copy so the narrative goes to the file only |
 
 ---
 
