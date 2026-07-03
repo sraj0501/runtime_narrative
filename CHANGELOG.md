@@ -4,6 +4,15 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.5.2 — 2026-07-03
+
+`exact_cause` now names the specific operands behind a `TypeError: unsupported operand type(s)` instead of just restating the exception message. No breaking changes.
+
+### Added
+- **Operand-type-mismatch explanation** (`runtime_narrative/diagnostics.py`) — in **rich** mode, when the failure is `TypeError: unsupported operand type(s) for OP: 'A' and 'B'`, `exact_cause` now parses the single failing source line to find the matching binary operation and names both operands: a bare variable name or a one-level constant-key subscript (`item["price"]`) is resolved against the frame locals already captured for the rich-diagnostics locals section (no extra capture cost) and shown with its actual value — e.g. `` `promo` = {'buy': 1, 'get': 1, 'item_sku': 'SHIRT-001'} (dict) and `item['price']` = 29.99 (float) can't be combined with '*' - float and dict are incompatible operand types. `` Anything not safely resolvable (function calls, attribute chains) shows the expression text without a value rather than guessing; a variable whose name looks like a secret shows `(type, redacted)` instead of its value, reusing the same redaction rules as the rest of rich mode. Falls back to the existing generic one-line message in lean mode, for any other error shape, or if parsing the line fails for any reason — this can only add detail, never break an existing diagnosis.
+
+---
+
 ## 1.5.1 — 2026-07-03
 
 Two small correctness fixes found while building a new example, plus the example itself. No breaking changes.

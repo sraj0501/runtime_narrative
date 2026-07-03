@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import re
 import sys
@@ -261,6 +262,114 @@ def _should_redact_key(
     return False
 
 
+# ── Operand-type-mismatch explanation ───────────────────────────────────────
+# Names the specific variable(s)/expression(s) behind a
+# "TypeError: unsupported operand type(s) for OP: 'A' and 'B'" instead of just
+# restating the exception message. Only activates in rich mode, reusing the
+# frame locals already captured there (no extra capture cost) and the same
+# redaction pipeline as the locals section. Anything it can't confidently
+# resolve falls back to the generic exact_cause untouched.
+
+_OPERAND_TYPE_ERROR_RE = re.compile(
+    r"^unsupported operand type\(s\) for (?P<op>\S+): '(?P<left_type>\w+)' and '(?P<right_type>\w+)'$"
+)
+
+_OP_SYMBOL_TO_AST: dict[str, type] = {
+    "+": ast.Add, "-": ast.Sub, "*": ast.Mult, "/": ast.Div,
+    "//": ast.FloorDiv, "%": ast.Mod, "**": ast.Pow, "@": ast.MatMult,
+    "&": ast.BitAnd, "|": ast.BitOr, "^": ast.BitXor, "<<": ast.LShift, ">>": ast.RShift,
+}
+
+
+def _safe_resolve_expr(node: ast.AST, frame_locals: Mapping[str, Any]) -> tuple[bool, Any]:
+    """Resolve a bare name or a one-level constant-key subscript (e.g. ``item["price"]``)
+    against already-captured frame locals. Never calls into user code (no
+    attribute access, no function calls) — only dict/list/tuple __getitem__ on
+    values we already hold a reference to."""
+    if isinstance(node, ast.Name):
+        if node.id in frame_locals:
+            return True, frame_locals[node.id]
+        return False, None
+    if isinstance(node, ast.Subscript):
+        base_ok, base_val = _safe_resolve_expr(node.value, frame_locals)
+        if not base_ok:
+            return False, None
+        key_node = node.slice
+        if isinstance(key_node, ast.Constant):
+            try:
+                return True, base_val[key_node.value]
+            except Exception:
+                return False, None
+    return False, None
+
+
+def _describe_operand(
+    node: ast.AST,
+    type_name: str,
+    frame_locals: Mapping[str, Any],
+    *,
+    max_len: int,
+    extra_redact: tuple[str, ...],
+    redact_patterns: tuple[str, ...],
+    redact_callback: Any,
+) -> str:
+    try:
+        text = ast.unparse(node)
+    except Exception:
+        text = "<expr>"
+    if isinstance(node, ast.Name) and _should_redact_key(
+        node.id, extra=extra_redact, patterns=redact_patterns, callback=redact_callback
+    ):
+        return f"`{text}` ({type_name}, redacted)"
+    resolved, value = _safe_resolve_expr(node, frame_locals)
+    if resolved:
+        value_repr = _serialize_value(
+            value, max_len=max_len, depth=0, max_depth=1,
+            extra_redact=extra_redact, redact_patterns=redact_patterns, redact_callback=redact_callback,
+        )
+        return f"`{text}` = {value_repr} ({type_name})"
+    return f"`{text}` ({type_name})"
+
+
+def _infer_operand_type_mismatch(
+    message: str,
+    source_line: str,
+    frame_locals: Mapping[str, Any],
+    *,
+    max_len: int,
+    extra_redact: tuple[str, ...],
+    redact_patterns: tuple[str, ...],
+    redact_callback: Any,
+) -> str | None:
+    """For 'unsupported operand type(s) for OP: A and B', name the specific
+    operands involved and (when safely resolvable) their actual values,
+    instead of just restating the exception message. Returns None on any
+    parse/resolution failure so callers can fall back to the generic cause."""
+    m = _OPERAND_TYPE_ERROR_RE.match(message.strip())
+    if not m:
+        return None
+    op_cls = _OP_SYMBOL_TO_AST.get(m.group("op"))
+    if op_cls is None:
+        return None
+    try:
+        tree = ast.parse(f"async def _f():\n    {source_line.strip()}")
+    except SyntaxError:
+        return None
+    binop = next(
+        (n for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, op_cls)),
+        None,
+    )
+    if binop is None:
+        return None
+    kwargs = dict(max_len=max_len, extra_redact=extra_redact, redact_patterns=redact_patterns, redact_callback=redact_callback)
+    left_desc = _describe_operand(binop.left, m.group("left_type"), frame_locals, **kwargs)
+    right_desc = _describe_operand(binop.right, m.group("right_type"), frame_locals, **kwargs)
+    return (
+        f"{left_desc} and {right_desc} can't be combined with '{m.group('op')}' - "
+        f"{m.group('left_type')} and {m.group('right_type')} are incompatible operand types."
+    )
+
+
 def _capture_locals_mapping(
     locals_map: Mapping[str, Any],
     *,
@@ -384,6 +493,18 @@ def build_enriched_failure(
     elif config.max_traceback_chars is not None:
         tb_out, truncated = _truncate_tb(full_tb, config.max_traceback_chars)
 
+    exact_cause = _infer_exact_cause(exc_type.__name__, str(exc), source_line)
+    if mode == "rich" and exc_type.__name__ == "TypeError" and frame_objs and 0 <= primary_idx < len(frame_objs):
+        enhanced_cause = _infer_operand_type_mismatch(
+            str(exc), source_line, frame_objs[primary_idx].f_locals,
+            max_len=config.max_local_value_len,
+            extra_redact=config.redact_extra,
+            redact_patterns=config.redact_patterns,
+            redact_callback=config.redact_callback,
+        )
+        if enhanced_cause is not None:
+            exact_cause = enhanced_cause
+
     summary = FailureSummary(
         error_type=exc_type.__name__,
         error_message=str(exc),
@@ -392,7 +513,7 @@ def build_enriched_failure(
         function=function,
         source_line=source_line,
         exception_chain=_build_exception_chain(exc),
-        exact_cause=_infer_exact_cause(exc_type.__name__, str(exc), source_line),
+        exact_cause=exact_cause,
         traceback_text=tb_out,
     )
 

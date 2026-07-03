@@ -202,6 +202,12 @@ runtime-narrative story <story_id>
 
 ## Changelog
 
+### 1.5.2
+
+**New — operand-type-mismatch explanation**
+
+- `exact_cause` now names the specific operands behind a `TypeError: unsupported operand type(s) for OP: 'A' and 'B'` in rich mode, resolving simple operands (bare names, one-level constant-key subscripts) against the frame locals already captured for the locals section, with the same redaction rules. Falls back to the existing generic message in lean mode or when it can't confidently parse/resolve the line.
+
 ### 1.5.1
 
 **Fixes — found while building the FastAPI "ugly traceback" example**

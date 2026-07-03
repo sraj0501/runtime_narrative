@@ -252,3 +252,86 @@ def test_compressed_stack_summary_counts_app_frames() -> None:
 
     assert "app frame" in enriched.compressed_stack_summary
     assert str(len(enriched.stack_frames)) in enriched.compressed_stack_summary
+
+
+# ── Operand-type-mismatch exact_cause enhancement ─────────────────────────────
+
+def test_exact_cause_names_operands_on_type_mismatch_in_rich_mode() -> None:
+    cfg = FailureDiagnosticsConfig(runtime_environment="development", failure_diagnostics="rich")
+
+    def inner() -> None:
+        item = {"price": 29.99}
+        promo = {"buy": 1, "get": 1}
+        item["price"] * promo  # noqa: B018 - deliberately triggers TypeError
+
+    try:
+        inner()
+    except TypeError as e:
+        enriched = build_enriched_failure(type(e), e, e.__traceback__, config=cfg)
+
+    cause = enriched.summary.exact_cause
+    assert "item['price']" in cause
+    assert "29.99" in cause
+    assert "promo" in cause
+    assert "{'buy': 1, 'get': 1}" in cause
+    assert "float" in cause and "dict" in cause
+    # Must stay plain ASCII -- this string also flows into JSON/OTel, not just
+    # a Unicode-aware console.
+    assert all(ord(c) < 128 for c in cause)
+
+
+def test_exact_cause_falls_back_to_generic_in_lean_mode() -> None:
+    """The enhancement only fires in rich mode -- lean mode never inspects locals."""
+    cfg = FailureDiagnosticsConfig(runtime_environment="development", failure_diagnostics="lean")
+
+    def inner() -> None:
+        item = {"price": 29.99}
+        promo = {"buy": 1, "get": 1}
+        item["price"] * promo  # noqa: B018
+
+    try:
+        inner()
+    except TypeError as e:
+        enriched = build_enriched_failure(type(e), e, e.__traceback__, config=cfg)
+
+    assert enriched.summary.exact_cause.startswith("The statement `")
+
+
+def test_exact_cause_redacts_operand_named_like_a_secret() -> None:
+    cfg = FailureDiagnosticsConfig(runtime_environment="development", failure_diagnostics="rich")
+
+    def inner() -> None:
+        api_token = {"scope": "read"}
+        1.5 * api_token  # noqa: B018
+
+    try:
+        inner()
+    except TypeError as e:
+        enriched = build_enriched_failure(type(e), e, e.__traceback__, config=cfg)
+
+    cause = enriched.summary.exact_cause
+    assert "redacted" in cause
+    assert "scope" not in cause
+
+
+def test_exact_cause_falls_back_when_operand_not_a_simple_expression() -> None:
+    """Function calls / complex expressions aren't safely resolvable -- the
+    enhancement should still fire (naming the expression text) without
+    evaluating anything, and never raise."""
+    cfg = FailureDiagnosticsConfig(runtime_environment="development", failure_diagnostics="rich")
+
+    def get_promo() -> dict:
+        return {"buy": 1}
+
+    def inner() -> None:
+        price = 10.0
+        price * get_promo()  # noqa: B018
+
+    try:
+        inner()
+    except TypeError as e:
+        enriched = build_enriched_failure(type(e), e, e.__traceback__, config=cfg)
+
+    cause = enriched.summary.exact_cause
+    assert "get_promo()" in cause
+    assert "price" in cause

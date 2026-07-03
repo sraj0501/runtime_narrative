@@ -2447,7 +2447,7 @@ Emitted when an exception propagates out of the story block. Contains the full e
 | `function` | `str` | Function name of the primary frame |
 | `source_line` | `str` | Source text of the failing line |
 | `exception_chain` | `str` | Human-readable chain of chained exceptions (`A <- B <- C`), up to 5 levels. Follows `__cause__` (`raise X from Y`) unconditionally; follows `__context__` (implicit chaining) only when the raiser didn't suppress it with `raise X from None` — matching Python's own traceback output, so this never surfaces an exception the raiser deliberately hid |
-| `exact_cause` | `str` | Inferred one-line cause description |
+| `exact_cause` | `str` | Inferred one-line cause description. For `TypeError: unsupported operand type(s) for OP: 'A' and 'B'` in **rich** mode, this names the specific operands instead of restating the exception message — e.g. `` `promo` = {'buy': 1, ...} (dict) and `item['price']` = 29.99 (float) can't be combined with '*' - float and dict are incompatible operand types. `` A bare variable name or a one-level constant-key subscript (`item["price"]`) is resolved against the already-captured frame locals (same redaction rules as the locals section — a secret-looking name shows `(type, redacted)` instead of its value); anything more complex (function calls, attribute chains) shows the expression text without a value. Falls back to the generic one-line message in lean mode or for any other error shape |
 | `llm_analysis` | `str \| None` | Analyzer output; `None` if no analyzer or `background_analysis=True` |
 | `stage_timeline` | `str` | Text summary of all stages and their states |
 | `progress_percent` | `int` | Percentage of stages completed at failure time |
