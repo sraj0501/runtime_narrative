@@ -41,6 +41,10 @@ def runtime_narrative_story(
             "failure_diagnostics": failure_diagnostics,
             "allow_rich_in_production": allow_rich_in_production,
             "app_roots": app_roots,
+            # Without this, story() would auto-detect the caller's frame as
+            # this decorator's own wrapper closure, reporting every decorated
+            # story as "runtime_narrative.decorators" instead of func's module.
+            "module": func.__module__,
         }
 
         if inspect.iscoroutinefunction(func):
@@ -72,14 +76,14 @@ def runtime_narrative_stage(name: str | None = None) -> Callable[[F], F]:
 
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any):
-                async with stage(stage_name):
+                async with stage(stage_name, module=func.__module__):
                     return await func(*args, **kwargs)
 
             return async_wrapper  # type: ignore[return-value]
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any):
-            with stage(stage_name):
+            with stage(stage_name, module=func.__module__):
                 return func(*args, **kwargs)
 
         return sync_wrapper  # type: ignore[return-value]

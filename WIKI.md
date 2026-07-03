@@ -260,6 +260,7 @@ story(
     redact_extra: Sequence[str] | None = None,
     total_stages: int | None = None,
     dry_run: bool = False,
+    module: str | None = None,
 )
 ```
 
@@ -281,6 +282,7 @@ story(
 | `redact_extra` | `Sequence[str] \| None` | `None` | Additional key substrings to redact from local variables in rich mode. |
 | `total_stages` | `int \| None` | `None` | Declared total stages. Enables accurate progress percentages. Can also be set later via `runtime.set_total_stages(n)`. |
 | `dry_run` | `bool` | `False` | Stage exceptions are suppressed; all stages complete; story always succeeds. |
+| `module` | `str \| None` | auto-detected | The module that opened the story, shown by `ConsoleRenderer`. Auto-detected from the caller's frame via `sys._getframe(1)` (cheap — no stack walking) if not given. Pass explicitly when `story()` is opened from inside a wrapper (a decorator, middleware, etc.) so it doesn't report the wrapper's own module instead of the real call site — `@runtime_narrative_story` does this automatically with `func.__module__`. |
 
 ### Sync usage
 
@@ -419,7 +421,7 @@ with story("Silent Operation", renderers=[]):
 
 ## 6. stage() — Stage Context Managers
 
-`stage(name)` is a dual sync/async context manager that must be called inside an active `story()`. It registers a `StageRecord` on the story runtime, emits `StageStarted` and (on success) `StageCompleted`, and records its duration.
+`stage(name, *, optional=False, module=None)` is a dual sync/async context manager that must be called inside an active `story()`. It registers a `StageRecord` on the story runtime, emits `StageStarted` and (on success) `StageCompleted`, and records its duration. `module` — like `story()`'s parameter of the same name — is auto-detected from the caller's frame if not given, and shown by `ConsoleRenderer` (see §10.1); pass it explicitly when `stage()` is opened from inside a wrapper.
 
 ### Sync usage
 
@@ -449,6 +451,7 @@ with story("Process Order"):
 | `failed` | `bool` | `True` when the stage propagated an exception |
 | `stage_index` | `int` | Zero-based position in the story's stage list |
 | `parent_stage_name` | `str \| None` | Name of the enclosing stage, or `None` |
+| `module` | `str` | The module that opened the stage, auto-detected or explicit |
 
 ### Async usage
 
@@ -1089,7 +1092,18 @@ Prints colored, human-readable output to stdout by default. Uses `typer.secho` f
 
 `ConsoleRenderer` is the default when no `renderers=` argument is passed to `story()`.
 
-Every line carries a `[short_id]` tag (first 6 characters of that event's `story_id`), colored per story family (a root story and its sub-stories share one deterministic color), and indented by nesting depth (one level per open stage / sub-story). See [§21 Sub-stories and Log Capture](#21-sub-stories-and-log-capture) for the full nested output.
+Every line is prefixed with a `YYYY-MM-DD HH:MM:SS.mmm` timestamp (from the event's own `.timestamp`) followed by a `[short_id]` tag (first 6 characters of that event's `story_id`), colored per story family (a root story and its sub-stories share one deterministic color), and indented by nesting depth (one level per open stage / sub-story). See [§21 Sub-stories and Log Capture](#21-sub-stories-and-log-capture) for the full nested output.
+
+When known, the module that opened a story or stage (see `story()`/`stage()`'s `module` parameter in §5/§6) is shown in parentheses: always on the `Story started` line, and on a `Stage started` line only when it differs from the *previous* stage's module in that story — so a run of same-module stages doesn't repeat the tag, while a genuine cross-module transition stays visible:
+
+```
+2026-07-03 12:03:41.208 [abcdef] ▶ Story started: Process Upload (app.routes.upload)
+2026-07-03 12:03:41.209 [abcdef]   ▶ Stage started: Validate Input (app.validators)
+2026-07-03 12:03:41.210 [abcdef]   ✔ Stage completed: Validate Input (0.001s)
+2026-07-03 12:03:41.211 [abcdef]   ▶ Stage started: Insert Record (app.db)
+```
+
+`Validate Input` and any further same-module stage right after it would show no `(module)` tag; the next transition to a different module shows it again.
 
 ```python
 from runtime_narrative import story, stage, ConsoleRenderer  # top-level import

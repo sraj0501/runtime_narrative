@@ -30,6 +30,7 @@ class JsonRenderer:
                 "timestamp": event.timestamp.isoformat(),
                 "parent_story_id": getattr(event, "parent_story_id", None),
                 "root_story_id": getattr(event, "root_story_id", ""),
+                "module": getattr(event, "module", ""),
             })
 
         elif event_name == "StageStarted":
@@ -38,6 +39,7 @@ class JsonRenderer:
                 "story_id": event.story_id,
                 "stage_name": event.stage_name,
                 "timestamp": event.timestamp.isoformat(),
+                "module": getattr(event, "module", ""),
             })
 
         elif event_name == "StageCompleted":

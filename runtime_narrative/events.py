@@ -12,6 +12,7 @@ class StoryStarted:
     timestamp: datetime
     parent_story_id: str | None = None
     root_story_id: str = ""
+    module: str = ""
 
 
 @dataclass
@@ -23,6 +24,7 @@ class StageStarted:
     parent_stage_name: str | None = None
     story_name: str = ""
     root_story_id: str = ""
+    module: str = ""
 
 
 @dataclass

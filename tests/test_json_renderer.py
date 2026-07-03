@@ -35,6 +35,34 @@ def test_json_renderer_handles_llm_analysis_ready() -> None:
     assert "timestamp" in data
 
 
+# ── module field (StoryStarted / StageStarted) ────────────────────────────────
+
+def test_story_started_dump_includes_module() -> None:
+    from runtime_narrative.events import StoryStarted
+
+    buf = StringIO()
+    r = JsonRenderer(output=buf)
+    r.handle(StoryStarted(
+        story_id="sid", story_name="S", timestamp=datetime(2024, 6, 1), module="app.routes.upload",
+    ))
+    buf.seek(0)
+    data = json.loads(buf.read())
+    assert data["module"] == "app.routes.upload"
+
+
+def test_stage_started_dump_includes_module() -> None:
+    from runtime_narrative.events import StageStarted
+
+    buf = StringIO()
+    r = JsonRenderer(output=buf)
+    r.handle(StageStarted(
+        story_id="sid", stage_name="Validate", timestamp=datetime(2024, 6, 1), module="app.validators",
+    ))
+    buf.seek(0)
+    data = json.loads(buf.read())
+    assert data["module"] == "app.validators"
+
+
 # ── RotatingJsonRenderer ──────────────────────────────────────────────────────
 
 def test_rotating_renderer_writes_events_to_file() -> None:
