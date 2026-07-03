@@ -31,11 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from dotenv import load_dotenv
 
 from runtime_narrative import ConsoleRenderer, FailureDiagnosticsConfig, RuntimeNarrativeMiddleware  # noqa: E402
 from runtime_narrative.analyzers import OllamaFailureAnalyzer  # noqa: E402
 
 from fastapi_app.order_pipeline import checkout_order  # noqa: E402
+
+load_dotenv()
 
 CHECKOUT_PAYLOAD = {
     "cart": [
