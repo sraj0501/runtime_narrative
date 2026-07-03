@@ -131,3 +131,47 @@ def test_ollama_analyzer_returns_none_on_url_error():
     with patch("runtime_narrative.analyzers.ollama.urlopen", side_effect=URLError("no route")):
         result = analyzer.analyze_failure(**_KWARGS)
     assert result is None
+
+
+# ── Configurable timeout + failure visibility ─────────────────────────────────
+
+def test_default_timeout_seconds_falls_back_when_env_unset(monkeypatch):
+    monkeypatch.delenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", raising=False)
+    assert OllamaFailureAnalyzer(model="llama3").timeout_seconds == 12.0
+    assert LLMFailureAnalyzer(model="gpt-4", endpoint="http://x/v1/chat/completions").timeout_seconds == 12.0
+
+
+def test_default_timeout_seconds_reads_env(monkeypatch):
+    monkeypatch.setenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", "45")
+    assert OllamaFailureAnalyzer(model="llama3").timeout_seconds == 45.0
+
+
+def test_default_timeout_seconds_falls_back_on_invalid_env(monkeypatch):
+    monkeypatch.setenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", "not-a-number")
+    assert OllamaFailureAnalyzer(model="llama3").timeout_seconds == 12.0
+
+
+def test_explicit_timeout_seconds_overrides_env(monkeypatch):
+    monkeypatch.setenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", "45")
+    assert OllamaFailureAnalyzer(model="llama3", timeout_seconds=5.0).timeout_seconds == 5.0
+
+
+def test_ollama_analyzer_logs_warning_on_request_failure(caplog):
+    from urllib.error import URLError
+    analyzer = OllamaFailureAnalyzer(model="llama3", timeout_seconds=12.0)
+    with caplog.at_level("WARNING", logger="runtime_narrative.analyzers.ollama"):
+        with patch("runtime_narrative.analyzers.ollama.urlopen", side_effect=URLError("no route")):
+            result = analyzer.analyze_failure(**_KWARGS)
+    assert result is None
+    assert any("no LLM analysis" in record.message for record in caplog.records)
+    assert any("12.0" in record.message for record in caplog.records)
+
+
+def test_llm_analyzer_logs_warning_on_malformed_response(caplog):
+    body = b"not json at all"
+    analyzer = LLMFailureAnalyzer(model="gpt-4", endpoint="http://localhost/v1/chat/completions")
+    with caplog.at_level("WARNING", logger="runtime_narrative.analyzers.ollama"):
+        with patch("runtime_narrative.analyzers.ollama.urlopen", return_value=_mock_http_response(body)):
+            result = analyzer.analyze_failure(**_KWARGS)
+    assert result is None
+    assert any("no LLM analysis" in record.message for record in caplog.records)

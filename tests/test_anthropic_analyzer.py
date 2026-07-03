@@ -132,3 +132,31 @@ def test_parse_response_valid_json() -> None:
 def test_parse_response_fallback() -> None:
     result = _make_analyzer()._parse_response("plain text")
     assert result == "plain text"
+
+
+def test_default_timeout_falls_back_to_thirty_seconds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", raising=False)
+    assert _make_analyzer().timeout_seconds == 30.0
+
+
+def test_default_timeout_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", "45")
+    assert _make_analyzer().timeout_seconds == 45.0
+
+
+def test_explicit_timeout_overrides_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS", "45")
+    assert _make_analyzer(timeout_seconds=5.0).timeout_seconds == 5.0
+
+
+def test_analyze_failure_logs_warning_on_exception(caplog: pytest.LogCaptureFixture) -> None:
+    mock_client = mock.MagicMock()
+    mock_client.messages.create.side_effect = Exception("network error")
+
+    with mock.patch.object(_anthropic_mod, "_anthropic") as patched:
+        patched.Anthropic.return_value = mock_client
+        with caplog.at_level("WARNING", logger="runtime_narrative.analyzers.anthropic"):
+            result = _make_analyzer().analyze_failure(**_CALL_KWARGS)
+
+    assert result is None
+    assert any("no LLM analysis" in record.message for record in caplog.records)
