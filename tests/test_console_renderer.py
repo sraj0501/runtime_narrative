@@ -40,6 +40,7 @@ def test_renderer_ascii_glyphs_on_non_unicode_terminal(monkeypatch):
     assert r._glyph_arrow == ">"
     assert r._glyph_check == "[ok]"
     assert r._glyph_cross == "[FAIL]"
+    assert r._glyph_dash == "-"
 
 
 def test_renderer_unicode_glyphs_on_unicode_terminal(monkeypatch):
@@ -48,6 +49,33 @@ def test_renderer_unicode_glyphs_on_unicode_terminal(monkeypatch):
     assert r._glyph_arrow == "▶"
     assert r._glyph_check == "✔"
     assert r._glyph_cross == "❌"
+    assert r._glyph_dash == "—"
+
+
+def test_rich_locals_line_uses_ascii_dash_on_non_unicode_terminal(monkeypatch, capsys):
+    """The 'frame_N — file:line in func' locals heading must go through the same
+    ASCII-fallback path as the other glyphs, not a hardcoded em-dash that would
+    degrade to a '?' replacement character on a non-UTF-8 stream."""
+    monkeypatch.setattr(console_mod, "_stdout_supports_unicode", lambda: False)
+    r = ConsoleRenderer()
+    event = FailureOccurred(
+        story_id="sid", story_name="S", stage_name="St",
+        error_type="TypeError", error_message="m", filename="f.py", lineno=1,
+        function="fn", source_line="raise TypeError", exception_chain="TypeError: m",
+        exact_cause="because", llm_analysis=None, stage_timeline="x",
+        progress_percent=0, completed_stages=0, total_stages=1,
+        timestamp=datetime(2024, 1, 1),
+        diagnostics_mode="rich", primary_frame_reason="innermost_app",
+        stack_frames=[], source_snippet=None, compressed_stack_summary="",
+        hidden_frame_count=0, traceback_truncated=False,
+        locals_by_frame={"frame_0": {"filename": "f.py", "lineno": 1, "function": "fn", "locals": {"x": "1"}}},
+        redaction_removed_keys=0,
+        traceback_text="Traceback...",
+    )
+    r.handle(event)
+    out = capsys.readouterr().out
+    assert "frame_0 - f.py:1 in fn" in out
+    assert "—" not in out
 
 
 def test_secho_survives_unicode_encode_error_from_typer(monkeypatch):

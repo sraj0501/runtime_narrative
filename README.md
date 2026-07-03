@@ -294,6 +294,7 @@ Every script under `examples/` is runnable as-is: `uv run python examples/<name>
 | `middleware_skip_if.py` | `RuntimeNarrativeMiddleware(skip_if=...)` for FastAPI/Starlette |
 | `task_group.py` | `NarrativeTaskGroup` — concurrent asyncio tasks under one story |
 | `fastapi_app/` | Full FastAPI demo app (`uv run python -m examples.fastapi_app.run`) |
+| `fastapi_ugly_traceback_demo.py` | The same deep async bug (route → orchestrator → retry-wrapped pricing engine → `asyncio.gather` fan-out → the actual TypeError), run once with no instrumentation and once with runtime-narrative — a raw ~35-frame traceback vs. one pinpointed line, source snippet, and locals |
 
 **Testing and lifecycle utilities**
 | Script | Demonstrates |

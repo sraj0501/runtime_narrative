@@ -68,10 +68,12 @@ class ConsoleRenderer:
             self._glyph_arrow = "▶"
             self._glyph_check = "✔"
             self._glyph_cross = "❌"
+            self._glyph_dash = "—"
         else:
             self._glyph_arrow = ">"
             self._glyph_check = "[ok]"
             self._glyph_cross = "[FAIL]"
+            self._glyph_dash = "-"
         # story_id -> indent level of that story's own Story started/ended lines
         self._story_base_indent: dict[str, int] = {}
         # story_id -> stack of currently open stage names, for indent depth
@@ -404,7 +406,7 @@ class ConsoleRenderer:
                 for label, payload in locals_by_frame.items():
                     locs = payload.get("locals", {})
                     where = f"{payload.get('filename')}:{payload.get('lineno')} in {payload.get('function')}"
-                    self._secho(f"  {label} — {where}", fg=self._failure_heading_color)
+                    self._secho(f"  {label} {self._glyph_dash} {where}", fg=self._failure_heading_color)
                     for k, v in locs.items():
                         self._secho(f"    {k} = {v}", fg=self._failure_value_color)
                 removed = getattr(event, "redaction_removed_keys", 0)

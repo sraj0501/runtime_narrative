@@ -2446,7 +2446,7 @@ Emitted when an exception propagates out of the story block. Contains the full e
 | `lineno` | `int` | Line number of the primary frame |
 | `function` | `str` | Function name of the primary frame |
 | `source_line` | `str` | Source text of the failing line |
-| `exception_chain` | `str` | Human-readable chain of chained exceptions |
+| `exception_chain` | `str` | Human-readable chain of chained exceptions (`A <- B <- C`), up to 5 levels. Follows `__cause__` (`raise X from Y`) unconditionally; follows `__context__` (implicit chaining) only when the raiser didn't suppress it with `raise X from None` — matching Python's own traceback output, so this never surfaces an exception the raiser deliberately hid |
 | `exact_cause` | `str` | Inferred one-line cause description |
 | `llm_analysis` | `str \| None` | Analyzer output; `None` if no analyzer or `background_analysis=True` |
 | `stage_timeline` | `str` | Text summary of all stages and their states |
