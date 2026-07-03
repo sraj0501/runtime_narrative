@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
 import re
 from dataclasses import dataclass, field
 from functools import partial
@@ -10,6 +12,26 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from ..failure import FailureSummary
+
+logger = logging.getLogger(__name__)
+
+
+def _default_analyzer_timeout_seconds(fallback: float = 12.0) -> float:
+    """Default request timeout for LLM failure analyzers.
+
+    Reads `RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS` so deployments with
+    slower/cold-loading local models (e.g. Ollama loading a multi-GB model
+    from disk) can raise it without subclassing or passing timeout_seconds=
+    at every call site. Falls back to `fallback` (each analyzer's own
+    previous hardcoded default) when the env var is unset or invalid.
+    """
+    raw = os.getenv("RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS")
+    if not raw:
+        return fallback
+    try:
+        return float(raw)
+    except ValueError:
+        return fallback
 
 
 _SECTION_LABELS = {
@@ -114,7 +136,7 @@ class LLMFailureAnalyzer:
 
     model: str
     endpoint: str
-    timeout_seconds: float = 12.0
+    timeout_seconds: float = field(default_factory=_default_analyzer_timeout_seconds)
     include_traceback_lines: int = 30
     max_context_chars: int = 8000
 
@@ -152,12 +174,27 @@ class LLMFailureAnalyzer:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")
         except (URLError, TimeoutError, Exception):
+            logger.warning(
+                "LLMFailureAnalyzer: request to %s timed out or failed "
+                "(timeout_seconds=%s) -- no LLM analysis for this failure. "
+                "Raise RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS if the "
+                "endpoint just needs more time (e.g. a cold model load).",
+                self.endpoint,
+                self.timeout_seconds,
+                exc_info=True,
+            )
             return None
 
         try:
             parsed = json.loads(body)
             text = parsed["choices"][0]["message"]["content"].strip()
         except Exception:
+            logger.warning(
+                "LLMFailureAnalyzer: response from %s was not the expected "
+                "chat-completions JSON shape -- no LLM analysis for this failure.",
+                self.endpoint,
+                exc_info=True,
+            )
             return None
 
         return _parse_structured_response(text) or None
@@ -200,7 +237,7 @@ class OllamaFailureAnalyzer:
 
     model: str
     endpoint: str = "http://127.0.0.1:11434/api/generate"
-    timeout_seconds: float = 12.0
+    timeout_seconds: float = field(default_factory=_default_analyzer_timeout_seconds)
     include_traceback_lines: int = 30
     max_context_chars: int = 8000
 
@@ -238,12 +275,27 @@ class OllamaFailureAnalyzer:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")
         except (URLError, TimeoutError, Exception):
+            logger.warning(
+                "OllamaFailureAnalyzer: request to %s timed out or failed "
+                "(timeout_seconds=%s) -- no LLM analysis for this failure. "
+                "Raise RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS if the "
+                "endpoint just needs more time (e.g. a cold model load).",
+                self.endpoint,
+                self.timeout_seconds,
+                exc_info=True,
+            )
             return None
 
         try:
             parsed = json.loads(body)
             text = parsed.get("response", "").strip()
         except Exception:
+            logger.warning(
+                "OllamaFailureAnalyzer: response from %s was not the expected "
+                "/api/generate JSON shape -- no LLM analysis for this failure.",
+                self.endpoint,
+                exc_info=True,
+            )
             return None
 
         return _parse_structured_response(text) or None

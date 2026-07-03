@@ -38,7 +38,12 @@ from runtime_narrative.analyzers import OllamaFailureAnalyzer  # noqa: E402
 
 from fastapi_app.order_pipeline import checkout_order  # noqa: E402
 
-load_dotenv()
+# load_dotenv() with no args only walks up from the current working
+# directory -- it won't find examples/.env when the script is launched from
+# the repo root (e.g. `uv run python examples/fastapi_ugly_traceback_demo.py`).
+# Point it at this file's own directory so the LLM analyzer env vars load
+# regardless of where the process is launched from.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 CHECKOUT_PAYLOAD = {
     "cart": [

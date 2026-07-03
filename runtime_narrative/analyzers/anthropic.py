@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -14,8 +15,11 @@ except ImportError:
     _ANTHROPIC_AVAILABLE = False
 
 from ..failure import FailureSummary
+from .ollama import _default_analyzer_timeout_seconds
 
 __all__ = ["AnthropicFailureAnalyzer"]
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
@@ -24,7 +28,7 @@ _DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 class AnthropicFailureAnalyzer:
     api_key: str = field(default_factory=lambda: os.environ.get("ANTHROPIC_API_KEY", ""))
     model: str = field(default_factory=lambda: os.environ.get("RUNTIME_NARRATIVE_MODEL", _DEFAULT_MODEL))
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = field(default_factory=lambda: _default_analyzer_timeout_seconds(fallback=30.0))
     max_tokens: int = 1024
     system_prompt: str = "You are an expert Python debugging assistant. Be concise and specific."
 
@@ -120,6 +124,15 @@ class AnthropicFailureAnalyzer:
             )
             text = response.content[0].text.strip()
         except Exception:
+            logger.warning(
+                "AnthropicFailureAnalyzer: request to model %s timed out or "
+                "failed (timeout_seconds=%s) -- no LLM analysis for this "
+                "failure. Raise RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS "
+                "if the API just needs more time.",
+                self.model,
+                self.timeout_seconds,
+                exc_info=True,
+            )
             return None
         return self._parse_response(text) or None
 
@@ -150,5 +163,14 @@ class AnthropicFailureAnalyzer:
             )
             text = response.content[0].text.strip()
         except Exception:
+            logger.warning(
+                "AnthropicFailureAnalyzer: async request to model %s timed "
+                "out or failed (timeout_seconds=%s) -- no LLM analysis for "
+                "this failure. Raise RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS "
+                "if the API just needs more time.",
+                self.model,
+                self.timeout_seconds,
+                exc_info=True,
+            )
             return None
         return self._parse_response(text) or None

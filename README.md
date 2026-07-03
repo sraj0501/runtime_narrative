@@ -318,6 +318,7 @@ Every script under `examples/` is runnable as-is: `uv run python examples/<name>
 | `ANTHROPIC_API_KEY` | API key | — | Required by `AnthropicFailureAnalyzer`; read automatically if `api_key=` is not passed |
 | `RUNTIME_NARRATIVE_RICH_LOG_FILE` | file path | — | Adds a file-backed `ConsoleRenderer` writing rich, human-readable output to this path, on top of whichever renderer TTY detection selects. Read by every auto-instrumentation entry point (FastAPI/Starlette, Django, Celery, gRPC) when `renderers=` is omitted |
 | `RUNTIME_NARRATIVE_RICH_LOG_CONSOLE` | `1`, `0` | `1` | With `RUNTIME_NARRATIVE_RICH_LOG_FILE` set and stdout a TTY, `0` suppresses the terminal copy so the narrative goes to the file only |
+| `RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS` | seconds (float) | `12` (`OllamaFailureAnalyzer`/`LLMFailureAnalyzer`), `30` (`AnthropicFailureAnalyzer`) | Request timeout for the built-in failure analyzers. Raise it for slower or cold-loading local models (e.g. Ollama loading a multi-GB model from disk); on timeout or any other request failure the analyzer logs a `logging.warning` (module `runtime_narrative.analyzers.*`) and falls back to no LLM analysis rather than failing the story |
 
 ---
 

@@ -4,6 +4,17 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## 1.5.3 — 2026-07-03
+
+LLM failure analyzers (`OllamaFailureAnalyzer`, `LLMFailureAnalyzer`, `AnthropicFailureAnalyzer`) used to fail silently on timeout or any other request error — the story just completed with no LLM analysis and no explanation why. No breaking changes.
+
+### Fixed
+- **Silent analyzer failures now log a warning.** All three analyzers previously caught every exception from the request (timeout, connection error, malformed response) and returned `None` with no signal anywhere. They now emit a `logging.warning(...)` (with `exc_info`) on the `runtime_narrative.analyzers.*` logger naming the endpoint/model, the configured timeout, and pointing at `RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS` — attach a handler (or `NarrativeLogHandler`) to see it. Falling back to no LLM analysis is unchanged; only the visibility changed.
+- **`timeout_seconds` is now configurable via `RUNTIME_NARRATIVE_ANALYZER_TIMEOUT_SECONDS`** (float seconds) instead of being hardcoded per analyzer. Each analyzer keeps its previous value as the fallback when the env var is unset (`12.0` for `OllamaFailureAnalyzer`/`LLMFailureAnalyzer`, `30.0` for `AnthropicFailureAnalyzer`). Found via the flagship traceback demo: a locally-hosted 8B model's cold load alone took ~14.6s, blowing past the previous fixed 12s budget with zero indication why the LLM box never appeared.
+- **`examples/fastapi_ugly_traceback_demo.py`** called `load_dotenv()` with no arguments, which only searches the current working directory and its parents — it never found `examples/.env` when the script is launched from the repo root. Now points at `Path(__file__).resolve().parent / ".env"` explicitly.
+
+---
+
 ## 1.5.2 — 2026-07-03
 
 `exact_cause` now names the specific operands behind a `TypeError: unsupported operand type(s)` instead of just restating the exception message. No breaking changes.
