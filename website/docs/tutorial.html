@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial: Your First Story — runtime-narrative</title>
+<meta name="description" content="A hands-on, step-by-step tutorial that takes a plain print()-based Python script and turns it into a fully instrumented, testable pipeline with automatic failure diagnostics.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="tutorial">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html" class="active">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="sidebar-search-input" type="search" placeholder="Filter docs…" autocomplete="off">
+    </div>
+    <div id="sidebar-nav"><div class="nav-empty">Loading…</div></div>
+  </nav>
+
+  <main class="content">
+    <article class="prose prose-wide">
+      <h1>Tutorial: Your First Story</h1>
+      <p class="lede">A hands-on walkthrough for people who haven't used <code>runtime-narrative</code> before. You'll take a plain, print()-based import script and grow it — one small step at a time — into something with automatic failure diagnostics, nested call tracing, multiple output formats, and a real test. <span class="badge badge-outline">~20 minutes</span></p>
+
+      <div class="callout callout-note">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p class="callout-title">Before you start</p>
+          <p>Python 3.9+ and <code>pip install "runtime-narrative[console]"</code> (the <code>console</code> extra gives you the colored terminal output shown below — everything still works without it, just in plain text). See <a href="/docs/installation.html">Installation</a> if you haven't already.</p>
+        </div>
+      </div>
+
+      <h2>What you'll build</h2>
+      <p>A tiny customer-import pipeline: load rows from a CSV, validate them, insert them. It's deliberately simple — the point isn't the pipeline, it's watching the same eleven lines of business logic gain progress tracking, structured failure diagnostics, nested tracing, and a test suite without ever being restructured.</p>
+
+      <hr>
+
+      <h2>Step 1 — Start with the plain version <span class="badge badge-outline">~2 min</span></h2>
+      <p>Here's the script before <code>runtime-narrative</code> touches it — three functions and a <code>main()</code>, instrumented the way most of us actually write a first draft: a few <code>print()</code> calls for progress, and whatever the interpreter prints if something goes wrong.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python"># import_customers.py
+import csv
+
+def load_csv(path):
+    print(f"Loading {path}...")
+    with open(path) as f:
+        return list(csv.DictReader(f))
+
+def validate_data(rows):
+    print(f"Validating {len(rows)} rows...")
+    for row in rows:
+        if not row.get("customer_id"):
+            raise ValueError("missing customer_id")
+
+def insert_records(rows):
+    print(f"Inserting {len(rows)} rows...")
+    seen = set()
+    for row in rows:
+        cid = row["customer_id"]
+        if cid in seen:
+            raise ValueError(f"duplicate customer id: {cid}")
+        seen.add(cid)
+        # db.insert(row) -- pretend this writes to a real database
+
+def main():
+    rows = load_csv("customers.csv")
+    validate_data(rows)
+    insert_records(rows)
+    print("Done.")
+
+if __name__ == "__main__":
+    main()</code></pre>
+      </div>
+
+      <p>This works, but it has the three problems every logging setup eventually runs into:</p>
+      <ul>
+        <li>The <code>print()</code> calls tell you a stage <em>started</em>, never how long it took or whether it actually finished.</li>
+        <li>If <code>insert_records</code> raises, you get Python's raw traceback — no indication of which stage was running, no structured way to tell "load failed" from "insert failed" in a log aggregator.</li>
+        <li>Nothing here composes: call this from a web request handler and a background job at the same time, and you have no way to tell their log lines apart.</li>
+      </ul>
+
+      <hr>
+
+      <h2>Step 2 — Wrap it in a story <span class="badge badge-outline">~3 min</span></h2>
+      <p>Import <code>story</code> and <code>stage</code>, wrap the body of <code>main()</code>, and delete the now-redundant <code>print()</code> calls. The function bodies of <code>load_csv</code>, <code>validate_data</code>, and <code>insert_records</code> don't change at all.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python"># import_customers.py
+import csv
+from runtime_narrative import story, stage
+
+def load_csv(path):
+    with open(path) as f:
+        return list(csv.DictReader(f))
+
+def validate_data(rows):
+    for row in rows:
+        if not row.get("customer_id"):
+            raise ValueError("missing customer_id")
+
+def insert_records(rows):
+    seen = set()
+    for row in rows:
+        cid = row["customer_id"]
+        if cid in seen:
+            raise ValueError(f"duplicate customer id: {cid}")
+        seen.add(cid)
+
+def main():
+    with story("Import Customers"):
+        with stage("Load CSV"):
+            rows = load_csv("customers.csv")
+        with stage("Validate Data"):
+            validate_data(rows)
+        with stage("Insert Records"):
+            insert_records(rows)
+
+if __name__ == "__main__":
+    main()</code></pre>
+      </div>
+
+      <p>Run it against a clean <code>customers.csv</code> (four unique rows). <code>ConsoleRenderer</code> is the default renderer — nothing to configure:</p>
+
+      <div class="terminal" data-replay>
+        <div class="terminal-head">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="terminal-label">python import_customers.py</span>
+          <button class="terminal-replay-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+        <div class="terminal-body">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">2026-01-15 09:12:03.115</span> <span class="t-id">[4f2a91]</span> <span class="t-dim">▶</span> Story started: Import Customers <span class="t-dim">(__main__)</span></div>
+<div class="term-line" style="animation-delay:60ms">  <span class="t-dim">2026-01-15 09:12:03.116</span> <span class="t-id">[4f2a91]</span> <span class="t-dim">▶</span> Stage started: Load CSV</div>
+<div class="term-line" style="animation-delay:120ms">  <span class="t-dim">2026-01-15 09:12:03.118</span> <span class="t-id">[4f2a91]</span> <span class="t-ok">✔</span> Stage completed: Load CSV (0.002s)</div>
+<div class="term-line" style="animation-delay:180ms">  <span class="t-dim">2026-01-15 09:12:03.118</span> <span class="t-id">[4f2a91]</span> <span class="t-dim">▶</span> Stage started: Validate Data</div>
+<div class="term-line" style="animation-delay:240ms">  <span class="t-dim">2026-01-15 09:12:03.119</span> <span class="t-id">[4f2a91]</span> <span class="t-ok">✔</span> Stage completed: Validate Data (0.001s)</div>
+<div class="term-line" style="animation-delay:300ms">  <span class="t-dim">2026-01-15 09:12:03.119</span> <span class="t-id">[4f2a91]</span> <span class="t-dim">▶</span> Stage started: Insert Records</div>
+<div class="term-line" style="animation-delay:360ms">  <span class="t-dim">2026-01-15 09:12:03.121</span> <span class="t-id">[4f2a91]</span> <span class="t-ok">✔</span> Stage completed: Insert Records (0.002s)</div>
+<div class="term-line gap-before" style="animation-delay:420ms"><span class="t-dim">2026-01-15 09:12:03.121</span> <span class="t-id">[4f2a91]</span> <span class="t-dim">▶</span> Story ended: <span class="t-ok">SUCCESS</span> (0.006s)</div>
+        </div>
+      </div>
+
+      <div class="callout callout-tip">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.05V17h6v-.25c0-.85.4-1.55 1-2.05A7 7 0 0 0 12 2Z"/></svg>
+        <div>
+          <p class="callout-title">Checkpoint</p>
+          <p>You should see one <code>Story started</code> line, a start/complete pair per stage with real durations, and one <code>Story ended: SUCCESS</code> line. <code>[4f2a91]</code> is a short ID unique to this run — it becomes useful the moment two stories are active at once (Step 5).</p>
+        </div>
+      </div>
+
+      <hr>
+
+      <h2>Step 3 — Make it fail on purpose <span class="badge badge-outline">~3 min</span></h2>
+      <p>No code changes needed — just give <code>customers.csv</code> a duplicate <code>customer_id</code> so <code>insert_records</code> raises. This is the moment instrumentation earns its keep: instead of a bare traceback, <code>story()</code> catches the exception at the story boundary, builds a structured failure report, and <em>then</em> re-raises it.</p>
+
+      <div class="terminal" data-replay>
+        <div class="terminal-head">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="terminal-label">python import_customers.py</span>
+          <button class="terminal-replay-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+        <div class="terminal-body">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">2026-01-15 09:14:47.203</span> <span class="t-id">[9b31de]</span> <span class="t-dim">▶</span> Story started: Import Customers <span class="t-dim">(__main__)</span></div>
+<div class="term-line" style="animation-delay:50ms">  <span class="t-dim">2026-01-15 09:14:47.204</span> <span class="t-id">[9b31de]</span> <span class="t-dim">▶</span> Stage started: Load CSV</div>
+<div class="term-line" style="animation-delay:100ms">  <span class="t-dim">2026-01-15 09:14:47.206</span> <span class="t-id">[9b31de]</span> <span class="t-ok">✔</span> Stage completed: Load CSV (0.002s)</div>
+<div class="term-line" style="animation-delay:150ms">  <span class="t-dim">2026-01-15 09:14:47.206</span> <span class="t-id">[9b31de]</span> <span class="t-dim">▶</span> Stage started: Validate Data</div>
+<div class="term-line" style="animation-delay:200ms">  <span class="t-dim">2026-01-15 09:14:47.207</span> <span class="t-id">[9b31de]</span> <span class="t-ok">✔</span> Stage completed: Validate Data (0.001s)</div>
+<div class="term-line" style="animation-delay:250ms">  <span class="t-dim">2026-01-15 09:14:47.207</span> <span class="t-id">[9b31de]</span> <span class="t-dim">▶</span> Stage started: Insert Records</div>
+<div class="term-line gap-before" style="animation-delay:340ms"><span class="t-fail">❌ Failure detected</span></div>
+<div class="term-line" style="animation-delay:420ms">  Story:      Import Customers</div>
+<div class="term-line" style="animation-delay:450ms">  Stage:      Insert Records</div>
+<div class="term-line" style="animation-delay:480ms">  Error:      ValueError &mdash; duplicate customer id: CUST-104</div>
+<div class="term-line" style="animation-delay:510ms">  Location:   <span class="t-warn">import_customers.py:15</span>  insert_records</div>
+<div class="term-line" style="animation-delay:540ms">  Code:       raise ValueError(f"duplicate customer id: {cid}")</div>
+<div class="term-line gap-before" style="animation-delay:582ms">  Stack summary: 1 app frame(s), 0 other/hidden in full stack (1 total)</div>
+<div class="term-line gap-before" style="animation-delay:664ms">  <span class="t-hd">Why (exact):</span> the code explicitly raises ValueError here with message: duplicate customer id: CUST-104</div>
+<div class="term-line gap-before" style="animation-delay:746ms"><span class="t-dim">2026-01-15 09:14:47.209</span> <span class="t-id">[9b31de]</span> <span class="t-dim">▶</span> Story ended: <span class="t-fail">FAILED</span> (0.006s)</div>
+<div class="term-line gap-before" style="animation-delay:828ms"><span class="t-dim">Traceback (most recent call last):</span></div>
+<div class="term-line" style="animation-delay:868ms">  File <span class="t-dim">"import_customers.py"</span>, line 24, in main</div>
+<div class="term-line" style="animation-delay:908ms">    insert_records(rows)</div>
+<div class="term-line" style="animation-delay:948ms">  File <span class="t-dim">"import_customers.py"</span>, line 15, in insert_records</div>
+<div class="term-line" style="animation-delay:988ms">    raise ValueError(f"duplicate customer id: {cid}")</div>
+<div class="term-line" style="animation-delay:1028ms"><span class="t-fail">ValueError: duplicate customer id: CUST-104</span></div>
+        </div>
+      </div>
+
+      <p>Two things worth noticing:</p>
+      <ul>
+        <li>The failure box already tells you the exact stage, the exact line, and the exact code that raised — without you writing any error-handling code.</li>
+        <li>Python's own traceback still prints <em>after</em> the narration. That's not a bug: by design, <code>story()</code> narrates and then re-raises, the same as a plain <code>with</code>/<code>try</code> block, so anything downstream (a web framework turning this into an HTTP 500, a task queue retrying the job) still sees the exception. If you own the whole call stack and want to stop there, <code>story(..., suppress_traceback=True)</code> does that — see <a href="/docs/story.html">story()</a> for when that's (and isn't) a good idea.</li>
+      </ul>
+
+      <hr>
+
+      <h2>Step 4 — Turn on rich diagnostics <span class="badge badge-outline">~2 min</span></h2>
+      <p>By default, diagnostics are <strong>lean</strong>: enough to locate the bug, with no runtime cost beyond reading the traceback. Add one keyword argument to see the actual variable values in scope when it failed:</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">with story("Import Customers", failure_diagnostics="rich"):
+    ...</code></pre>
+      </div>
+
+      <p>The same failure now includes a <code>Locals</code> section, sourced from the failing frame (and one enclosing frame):</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>text</span></div>
+        <pre><code class="language-text">  Locals (rich diagnostics):
+    cid  = 'CUST-104'
+    seen = {'CUST-101', 'CUST-102', 'CUST-103', 'CUST-104'}
+    row  = {'customer_id': 'CUST-104', 'name': 'Priya Shah', 'email': 'priya@example.com'}</code></pre>
+      </div>
+
+      <p>Rich mode automatically redacts anything that looks like a secret (keys containing <code>password</code>, <code>token</code>, <code>api_key</code>, <code>cookie</code>, and more) before it's ever captured — you don't have to remember to scrub credentials out of your own log statements. Full field list and every redaction option: <a href="/docs/diagnostics.html">Failure Diagnostics</a>.</p>
+
+      <hr>
+
+      <h2>Step 5 — Trace a nested call, for free <span class="badge badge-outline">~3 min</span></h2>
+      <p>Split the insert logic into its own function that opens <em>its own</em> <code>story()</code>:</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">def insert_into_db(rows):
+    with story(f"DB: bulk insert {len(rows)} rows"):
+        with stage("Open Connection"):
+            conn = db.connect()
+        with stage("Bulk Insert"):
+            conn.insert_many(rows)
+
+def main():
+    with story("Import Customers"):
+        with stage("Load CSV"):
+            rows = load_csv("customers.csv")
+        with stage("Validate Data"):
+            validate_data(rows)
+        with stage("Insert Records"):
+            insert_into_db(rows)</code></pre>
+      </div>
+
+      <p>Nothing was passed between the two functions to link them. Because <code>insert_into_db</code>'s <code>story()</code> opens while <code>Import Customers</code>'s story is still active (same call stack, same <code>ContextVar</code> context), it's automatically detected as a <strong>sub-story</strong> — its own success/failure and duration, but tagged, indented, and colored as part of the same family:</p>
+
+      <div class="terminal" data-replay>
+        <div class="terminal-head">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="terminal-label">python import_customers.py</span>
+          <button class="terminal-replay-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+        <div class="terminal-body">
+<div class="term-line" style="animation-delay:0ms">  <span class="t-dim">2026-01-15 09:16:02.501</span> <span class="t-id">[c71a08]</span> <span class="t-dim">▶</span> Stage started: Insert Records</div>
+<div class="term-line" style="animation-delay:60ms">    <span class="t-dim">2026-01-15 09:16:02.502</span> <span class="t-id">[7f0e5d]</span> <span class="t-dim">▶</span> Story started: DB: bulk insert 4 rows <span class="t-dim">(__main__)</span></div>
+<div class="term-line" style="animation-delay:120ms">      <span class="t-dim">2026-01-15 09:16:02.502</span> <span class="t-id">[7f0e5d]</span> <span class="t-dim">▶</span> Stage started: Open Connection</div>
+<div class="term-line" style="animation-delay:180ms">      <span class="t-dim">2026-01-15 09:16:02.512</span> <span class="t-id">[7f0e5d]</span> <span class="t-ok">✔</span> Stage completed: Open Connection (0.010s)</div>
+<div class="term-line" style="animation-delay:240ms">      <span class="t-dim">2026-01-15 09:16:02.512</span> <span class="t-id">[7f0e5d]</span> <span class="t-dim">▶</span> Stage started: Bulk Insert</div>
+<div class="term-line" style="animation-delay:300ms">      <span class="t-dim">2026-01-15 09:16:02.531</span> <span class="t-id">[7f0e5d]</span> <span class="t-ok">✔</span> Stage completed: Bulk Insert (0.019s)</div>
+<div class="term-line" style="animation-delay:360ms">    <span class="t-dim">2026-01-15 09:16:02.531</span> <span class="t-id">[7f0e5d]</span> <span class="t-dim">▶</span> Story ended: <span class="t-ok">SUCCESS</span> (0.029s)</div>
+<div class="term-line gap-before" style="animation-delay:420ms">  <span class="t-dim">2026-01-15 09:16:02.531</span> <span class="t-id">[c71a08]</span> <span class="t-ok">✔</span> Stage completed: Insert Records (0.030s)</div>
+        </div>
+      </div>
+
+      <p>This is the same mechanism that makes a web request handler calling a database helper trace correctly with zero setup, and it stays correct under real concurrency — <code>asyncio.Task</code> copies context at creation time, so many callers sharing <code>insert_into_db</code> at once never cross-link into each other's tree. Full details: <a href="/docs/substories-logging.html">Sub-stories &amp; Log Capture</a>.</p>
+
+      <hr>
+
+      <h2>Step 6 — Send the same events somewhere else too <span class="badge badge-outline">~2 min</span></h2>
+      <p>A renderer is anything with a <code>handle(event)</code> method. Pass more than one and every event goes to all of them — nothing about <code>load_csv</code>, <code>validate_data</code>, or <code>insert_into_db</code> needs to change:</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage, ConsoleRenderer
+from runtime_narrative.renderer.json_renderer import JsonRenderer
+
+with open("import_customers.jsonl", "a") as log_file:
+    with story(
+        "Import Customers",
+        renderers=[ConsoleRenderer(), JsonRenderer(output=log_file)],
+    ):
+        ...</code></pre>
+      </div>
+
+      <p>You still get the colored terminal output from Step 2, plus one compact JSON object per event written to <code>import_customers.jsonl</code> — ready for a log aggregator, with the full diagnostics payload (stack frames, source snippet, locals) included on failure:</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>text</span></div>
+        <pre><code class="language-text">{"event": "StoryStarted", "story_id": "9b31de...", "story_name": "Import Customers", ...}
+{"event": "StageCompleted", "stage_name": "Load CSV", "duration_seconds": 0.002, ...}
+{"event": "FailureOccurred", "error_type": "ValueError", "error_message": "duplicate customer id: CUST-104", ...}</code></pre>
+      </div>
+
+      <p>Swap in <code>SqliteStoryRenderer</code> for a queryable database plus a CLI (<code>runtime-narrative failures</code>), or <code>OtelRenderer</code> for distributed tracing — same pattern every time. Full catalog: <a href="/docs/renderers.html">Renderers</a>.</p>
+
+      <hr>
+
+      <h2>Step 7 — Write a test <span class="badge badge-outline">~3 min</span></h2>
+      <p><code>StoryRecorder</code> is a drop-in replacement for <code>story()</code> in tests: it creates the story context, records every event, and gives you assertion helpers instead of parsing console output. The one rule: the code under test must call <code>stage()</code> directly, not open its own <code>story()</code> — which our <code>main()</code> already does.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python"># test_import_customers.py
+from runtime_narrative import stage
+from runtime_narrative.testing import StoryRecorder
+from import_customers import load_csv, validate_data, insert_records
+
+def run_import(rows):
+    with stage("Validate Data"):
+        validate_data(rows)
+    with stage("Insert Records"):
+        insert_records(rows)
+
+def test_import_succeeds_on_unique_rows():
+    rows = [{"customer_id": "CUST-101"}, {"customer_id": "CUST-102"}]
+    with StoryRecorder("Import Customers") as r:
+        run_import(rows)
+    r.assert_stages_completed(["Validate Data", "Insert Records"])
+    r.assert_no_failure()
+
+def test_import_fails_on_duplicate_id():
+    rows = [{"customer_id": "CUST-101"}, {"customer_id": "CUST-101"}]
+    with StoryRecorder("Import Customers") as r:
+        try:
+            run_import(rows)
+        except ValueError:
+            pass
+    r.assert_stage_failed("Insert Records", error_type="ValueError")</code></pre>
+      </div>
+
+      <div class="callout callout-warning">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <div>
+          <p class="callout-title">error_type is a string</p>
+          <p><code>error_type="ValueError"</code> — a string naming the class, not the class itself. Full assertion reference: <a href="/docs/testing.html">Testing with StoryRecorder</a>.</p>
+        </div>
+      </div>
+
+      <hr>
+
+      <h2>What you just built</h2>
+      <p>Starting from eleven lines of plain Python, you added: per-stage timing, a structured failure report with source context and exact-cause diagnosis, optional local-variable capture with automatic redaction, zero-config nested call tracing, a second output format running alongside the console, and a test suite — without restructuring a single function body. That's the whole idea: <code>story()</code>/<code>stage()</code> wrap what you already have.</p>
+
+      <h2>Where to go next</h2>
+      <div class="grid-cards cols-3">
+        <a class="card" href="/docs/concepts.html">
+          <div class="card-title">Core Concepts</div>
+          <p>The mental model behind stories, stages, events, and renderers — read this next if you want the "why," not just the "how."</p>
+        </a>
+        <a class="card" href="/docs/auto-instrumentation.html">
+          <div class="card-title">Auto-Instrumentation</div>
+          <p>Skip writing <code>stage()</code> calls entirely — instrument a whole class or module in one line.</p>
+        </a>
+        <a class="card" href="/docs/diagnostics.html">
+          <div class="card-title">Failure Diagnostics</div>
+          <p>Every redaction mechanism, production safety behavior, and the four built-in LLM failure analyzers.</p>
+        </a>
+        <a class="card" href="/docs/renderers.html">
+          <div class="card-title">Renderers</div>
+          <p>SQLite, OpenTelemetry, Prometheus, HTML reports, webhook alerting — the full catalog.</p>
+        </a>
+        <a class="card" href="/docs/integrations.html">
+          <div class="card-title">Framework Integrations</div>
+          <p>Drop this pattern into FastAPI, Django, Celery, or gRPC with one middleware/base-class each.</p>
+        </a>
+        <a class="card" href="/docs/showcase.html">
+          <div class="card-title">See It In Action</div>
+          <p>More real before/after terminal captures — including a 34-frame traceback collapsed to one line.</p>
+        </a>
+      </div>
+
+    </article>
+
+    <nav class="page-nav" id="page-nav" aria-label="Page navigation"></nav>
+  </main>
+
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

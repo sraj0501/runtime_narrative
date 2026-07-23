@@ -2,29 +2,29 @@
    Theme: light/dark via [data-theme] on <html>, falls back to prefers-color-scheme. */
 
 :root {
-  --bg: #ffffff;
-  --bg-soft: #f6f7f9;
-  --bg-elevated: #ffffff;
-  --border: #e5e7eb;
-  --border-soft: #eef0f3;
-  --text: #1a1d23;
-  --text-soft: #55606e;
-  --text-faint: #8b95a1;
-  --accent: #6d28d9;
-  --accent-2: #d97706;
-  --accent-soft: #f2edfe;
+  --bg: #f5f4f1;
+  --bg-soft: #ece9e4;
+  --bg-elevated: #fbfaf8;
+  --border: #ddd9d1;
+  --border-soft: #e6e3dc;
+  --text: #26262a;
+  --text-soft: #5c5e63;
+  --text-faint: #8a8b8f;
+  --accent: #6528c0;
+  --accent-2: #c2680a;
+  --accent-soft: #ece5f9;
   --accent-contrast: #ffffff;
   --code-bg: #0d1117;
   --code-text: #e6edf3;
   --code-border: #21262d;
-  --success: #16a34a;
-  --success-soft: #ecfdf3;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
-  --warning: #b45309;
-  --warning-soft: #fffbeb;
-  --info: #2563eb;
-  --info-soft: #eff6ff;
+  --success: #15803d;
+  --success-soft: #e7f3ea;
+  --danger: #b91c1c;
+  --danger-soft: #f8ecec;
+  --warning: #9a5b0a;
+  --warning-soft: #f6efe2;
+  --info: #1d4ed8;
+  --info-soft: #e8edfa;
   --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px rgba(20, 20, 30, 0.06);
   --radius: 10px;
   --header-h: 60px;

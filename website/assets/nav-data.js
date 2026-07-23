@@ -12,6 +12,7 @@ window.NARRATIVE_NAV = [
     group: "Getting Started",
     items: [
       { id: "installation", title: "Installation", href: "/docs/installation.html" },
+      { id: "tutorial", title: "Tutorial: Your First Story", href: "/docs/tutorial.html" },
       { id: "quickstart", title: "Quick Start", href: "/docs/quickstart.html" },
       { id: "concepts", title: "Core Concepts", href: "/docs/concepts.html" },
     ],
