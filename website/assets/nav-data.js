@@ -3,6 +3,12 @@
    `href` is always root-relative (starts with "/"). */
 window.NARRATIVE_NAV = [
   {
+    group: "Showcase",
+    items: [
+      { id: "showcase", title: "See It In Action", href: "/docs/showcase.html" },
+    ],
+  },
+  {
     group: "Getting Started",
     items: [
       { id: "installation", title: "Installation", href: "/docs/installation.html" },

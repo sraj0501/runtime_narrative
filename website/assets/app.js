@@ -369,6 +369,45 @@
     });
   }
 
+  /* ---------------- Terminal replay ---------------- */
+  function initTerminals() {
+    var terminals = document.querySelectorAll(".terminal[data-replay]");
+    if (!terminals.length) return;
+
+    function play(term) {
+      term.classList.remove("play");
+      var lines = term.querySelectorAll(".term-line");
+      lines.forEach(function (line) {
+        line.style.animation = "none";
+      });
+      void term.offsetWidth; // force reflow so the animation restarts
+      lines.forEach(function (line) {
+        line.style.animation = "";
+      });
+      term.classList.add("play");
+    }
+
+    terminals.forEach(function (term) {
+      var btn = term.querySelector(".terminal-replay-btn");
+      if (btn) btn.addEventListener("click", function () { play(term); });
+    });
+
+    if ("IntersectionObserver" in window) {
+      var seen = new WeakSet();
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting && !seen.has(entry.target)) {
+            seen.add(entry.target);
+            play(entry.target);
+          }
+        });
+      }, { threshold: 0.35 });
+      terminals.forEach(function (term) { observer.observe(term); });
+    } else {
+      terminals.forEach(play);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initMobileNav();
@@ -378,5 +417,6 @@
     enhanceCodeBlocks();
     buildToc();
     buildPageNav();
+    initTerminals();
   });
 })();

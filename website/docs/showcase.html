@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>See It In Action — runtime-narrative</title>
+<meta name="description" content="Real terminal output captured from runtime-narrative's own examples: a 34-frame traceback collapsed into one pinpointed diagnosis, free call tracing across functions, structured logs with a failure box, and polling loops that stop flooding your logs.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="showcase">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html" class="active">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="sidebar-search-input" type="search" placeholder="Filter docs…" autocomplete="off">
+    </div>
+    <div id="sidebar-nav"><div class="nav-empty">Loading…</div></div>
+  </nav>
+
+  <main class="content">
+    <article class="prose prose-wide">
+      <h1>See it in action</h1>
+      <p class="lede">Every terminal below is real output, captured from the scripts that actually ship in <code>examples/</code> — nothing here is a mockup. Run any of them yourself with <code>uv run python examples/&lt;name&gt;.py</code>, or click <strong>Replay</strong> to watch a session again.</p>
+
+      <h2>Why this changes the game for Python logging</h2>
+      <p>Traditional logging asks you to describe execution one disconnected line at a time — you thread request IDs through function signatures by hand, you scroll a 30-frame traceback to find the one line that's actually yours, and every polling loop floods the log forever. <code>runtime-narrative</code> asks a different question: <em>what is the story of this execution?</em> Wrap it in <code>story()</code>/<code>stage()</code> once, and correlation, diagnostics, and noise control come for free.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>Traditional print() / logging</th><th>runtime-narrative</th></tr></thead>
+          <tbody>
+            <tr><td>Correlating one request across functions</td><td>Thread a request ID through every function signature and every log call by hand</td><td>Nest <code>story()</code> calls — sub-stories auto-link via <code>ContextVar</code>, no threading, no new API</td></tr>
+            <tr><td>Understanding a failure</td><td>Scroll a 30+ frame traceback mixing your code with framework internals</td><td>One pinpointed frame, a source snippet, and — in rich mode — the exact local values involved</td></tr>
+            <tr><td>Noisy polling loops</td><td>One log line per iteration, forever</td><td><code>CoalescingRenderer</code> collapses repeats into a single summary line</td></tr>
+            <tr><td>Explaining "why it broke"</td><td>You reread the traceback and guess</td><td>An optional LLM analyzer turns the traceback into a plain-English cause and a targeted fix</td></tr>
+            <tr><td>Changing where output goes</td><td>Rewrite your logging calls</td><td>Swap renderers — same events, any combination of console/JSON/SQLite/OTel/Prometheus/webhooks</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr>
+
+      <h2>1. A wall of traceback vs. one pinpointed line</h2>
+      <p><code>examples/fastapi_ugly_traceback_demo.py</code> runs the exact same async bug two ways: an <code>asyncio.gather</code> fan-out inside a retry-wrapped pricing engine, called through FastAPI routing, that multiplies a price by a BOGO promo dict instead of a discount factor. Left: no instrumentation. Right: the same call stack, wrapped in <code>story()</code>/<code>stage()</code>.</p>
+
+      <div class="compare-grid">
+        <div>
+          <div class="compare-label bad"><span class="dot"></span> Without runtime-narrative</div>
+          <div class="terminal" data-replay>
+            <div class="terminal-head">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span class="terminal-label">34 stack frames, 102 lines</span>
+              <button class="terminal-replay-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+                <span>Replay</span>
+              </button>
+            </div>
+            <div class="terminal-body compact">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">Traceback (most recent call last):</span></div>
+<div class="term-line" style="animation-delay:42ms">  File <span class="t-dim">"app/routes/checkout.py"</span>, line 78, in bare_checkout</div>
+<div class="term-line" style="animation-delay:84ms">    return await checkout_order(cart, promo_code, payment_method)</div>
+<div class="term-line" style="animation-delay:126ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 146, in checkout_order</div>
+<div class="term-line" style="animation-delay:168ms">    return await orchestrator.run(cart, promo_code, payment_method)</div>
+<div class="term-line" style="animation-delay:210ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 53, in wrapper</div>
+<div class="term-line" style="animation-delay:252ms">    return await fn(*args, **kwargs)</div>
+<div class="term-line" style="animation-delay:294ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 130, in run</div>
+<div class="term-line" style="animation-delay:336ms">    total = await self.pricing.apply_discounts(cart, promo_code)</div>
+<div class="term-line" style="animation-delay:378ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 42, in wrapper</div>
+<div class="term-line" style="animation-delay:420ms">    raise last_exc from None</div>
+<div class="term-line" style="animation-delay:462ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 91, in apply_discounts</div>
+<div class="term-line" style="animation-delay:504ms">    discounts = await asyncio.gather(*[_compute_line_discount(i, promo_code) for i in cart])</div>
+<div class="term-line gap-before" style="animation-delay:546ms">  <span class="t-dim">... 24 more frames: asyncio.gather task stepping, httpx transport,</span></div>
+<div class="term-line" style="animation-delay:618ms">  <span class="t-dim">    starlette routing/middleware, fastapi dependency injection ...</span></div>
+<div class="term-line gap-before" style="animation-delay:660ms">  File <span class="t-dim">"app/order_pipeline.py"</span>, line 84, in _compute_line_discount</div>
+<div class="term-line" style="animation-delay:762ms">    return item["price"] * promo</div>
+<div class="term-line gap-before" style="animation-delay:804ms"><span class="t-fail">TypeError: unsupported operand type(s) for *: 'float' and 'dict'</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="compare-label good"><span class="dot"></span> With runtime-narrative</div>
+          <div class="terminal" data-replay>
+            <div class="terminal-head">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span class="terminal-label">1 pinpointed frame, locals included</span>
+              <button class="terminal-replay-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+                <span>Replay</span>
+              </button>
+            </div>
+            <div class="terminal-body compact">
+<div class="term-line" style="animation-delay:0ms"><span class="t-id">[825a79]</span> <span class="t-dim">▶</span> Story started: POST /orders/checkout</div>
+<div class="term-line" style="animation-delay:42ms">  <span class="t-id">[825a79]</span> <span class="t-dim">▶</span> Stage started: Reserve Inventory</div>
+<div class="term-line" style="animation-delay:84ms">  <span class="t-id">[825a79]</span> <span class="t-ok">✔</span> Stage completed: Reserve Inventory (0.000s)</div>
+<div class="term-line" style="animation-delay:126ms">  <span class="t-id">[825a79]</span> <span class="t-dim">▶</span> Stage started: Apply Pricing</div>
+<div class="term-line gap-before" style="animation-delay:228ms"><span class="t-fail">❌ Failure detected</span></div>
+<div class="term-line" style="animation-delay:360ms">  Story:      POST /orders/checkout</div>
+<div class="term-line" style="animation-delay:402ms">  Stage:      Apply Pricing</div>
+<div class="term-line" style="animation-delay:444ms">  Error:      TypeError &mdash; unsupported operand type(s) for *: 'float' and 'dict'</div>
+<div class="term-line" style="animation-delay:486ms">  Location:   <span class="t-warn">app/order_pipeline.py:84</span>  _compute_line_discount</div>
+<div class="term-line" style="animation-delay:528ms">  Code:       return item["price"] * promo</div>
+<div class="term-line gap-before" style="animation-delay:570ms">  Context:</div>
+<div class="term-line" style="animation-delay:652ms">        82 |     promo = PROMO_TABLE[promo_code]</div>
+<div class="term-line" style="animation-delay:694ms">        83 |     await asyncio.sleep(0)</div>
+<div class="term-line" style="animation-delay:736ms">  <span class="t-fail">&gt;   84 |     return item["price"] * promo</span></div>
+<div class="term-line" style="animation-delay:778ms">        85 |</div>
+<div class="term-line gap-before" style="animation-delay:820ms">  Stack summary: 9 app frame(s), 16 other/hidden in full stack (25 total)</div>
+<div class="term-line gap-before" style="animation-delay:902ms">  Locals (rich diagnostics):</div>
+<div class="term-line" style="animation-delay:984ms">    item  = {'sku': 'SHIRT-001', 'price': 29.99}</div>
+<div class="term-line" style="animation-delay:1026ms">    promo = {'buy': 1, 'get': 1, 'item_sku': 'SHIRT-001'}</div>
+<div class="term-line gap-before" style="animation-delay:1068ms">  <span class="t-hd">Why (exact):</span></div>
+<div class="term-line" style="animation-delay:1150ms">  `item['price']` = 29.99 (float) and `promo` = {'buy': 1, 'get': 1, ...} (dict)</div>
+<div class="term-line" style="animation-delay:1192ms">  can't be combined with '*' &mdash; float and dict are incompatible operand types.</div>
+<div class="term-line gap-before" style="animation-delay:1234ms"><span class="t-id">[825a79]</span> <span class="t-dim">▶</span> Story ended: <span class="t-fail">FAILED</span> (2.125s)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="terminal-caption">Both sides hit the identical bug through the identical call stack. Run it yourself: <code>uv run python examples/fastapi_ugly_traceback_demo.py</code>. The <code>Why (exact)</code> line naming <code>item['price']</code> and <code>promo</code> by name — instead of restating the generic <code>TypeError</code> message — is <code>FailureOccurred.exact_cause</code>; see the <a href="/docs/events.html">Event Reference</a>.</p>
+
+      <hr>
+
+      <h2>2. Call tracing across functions, for free</h2>
+      <p>Open a <code>story()</code> while another is already active — an API handler calling a DB helper, say — and it automatically becomes a linked <strong>sub-story</strong>: its own success/failure and duration, tagged with a short ID, indented by nesting depth, colored consistently per story family. No correlation ID to thread through the call, no manual span-linking.</p>
+
+      <div class="terminal" data-replay>
+        <div class="terminal-head">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="terminal-label">examples/substory_db_call.py</span>
+          <button class="terminal-replay-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+        <div class="terminal-body">
+<div class="term-line" style="animation-delay:0ms"><span class="t-id">[7a6211]</span> <span class="t-dim">▶</span> Story started: POST /orders</div>
+<div class="term-line" style="animation-delay:42ms">  <span class="t-id">[7a6211]</span> <span class="t-dim">▶</span> Stage started: Validate Input</div>
+<div class="term-line" style="animation-delay:84ms">  <span class="t-id">[7a6211]</span> <span class="t-ok">✔</span> Stage completed: Validate Input (0.020s)</div>
+<div class="term-line" style="animation-delay:126ms">  <span class="t-id">[7a6211]</span> <span class="t-dim">▶</span> Stage started: Persist Order</div>
+<div class="term-line" style="animation-delay:168ms">    <span class="t-id">[5752d4]</span> <span class="t-dim">▶</span> Story started: DB: INSERT INTO orders ...</div>
+<div class="term-line" style="animation-delay:240ms">      <span class="t-id">[5752d4]</span> <span class="t-dim">▶</span> Stage started: Acquire Connection</div>
+<div class="term-line" style="animation-delay:282ms">      <span class="t-id">[5752d4]</span> <span class="t-ok">✔</span> Stage completed: Acquire Connection (0.015s)</div>
+<div class="term-line" style="animation-delay:324ms">      <span class="t-id">[5752d4]</span> <span class="t-dim">▶</span> Stage started: Execute Query</div>
+<div class="term-line" style="animation-delay:366ms">      <span class="t-id">[5752d4]</span> <span class="t-ok">✔</span> Stage completed: Execute Query (0.030s)</div>
+<div class="term-line" style="animation-delay:408ms">    <span class="t-id">[5752d4]</span> <span class="t-dim">▶</span> Story ended: <span class="t-ok">SUCCESS</span> (0.046s)</div>
+<div class="term-line" style="animation-delay:480ms">  <span class="t-id">[7a6211]</span> <span class="t-ok">✔</span> Stage completed: Persist Order (0.046s)</div>
+<div class="term-line" style="animation-delay:552ms">  <span class="t-id">[7a6211]</span> <span class="t-dim">▶</span> Stage started: Notify</div>
+<div class="term-line" style="animation-delay:594ms">  <span class="t-id">[7a6211]</span> <span class="t-ok">✔</span> Stage completed: Notify (0.015s)</div>
+<div class="term-line" style="animation-delay:636ms"><span class="t-id">[7a6211]</span> <span class="t-dim">▶</span> Story ended: <span class="t-ok">SUCCESS</span> (0.082s)</div>
+        </div>
+      </div>
+      <p class="terminal-caption"><code>[5752d4]</code>'s story inherited <code>[7a6211]</code>'s renderers and diagnostics automatically and shares its <code>root_story_id</code> — this holds up under real concurrency for free, since <code>asyncio.Task</code> copies <code>ContextVar</code> state at creation. Details: <a href="/docs/substories-logging.html">Sub-stories &amp; Log Capture</a>.</p>
+
+      <hr>
+
+      <h2>3. Structured logs and a failure box, from one story()</h2>
+      <p><code>NarrativeLogHandler</code> folds ordinary <code>logging.warning()</code>/<code>.error()</code> calls into the same event stream as <code>story()</code>/<code>stage()</code> — one timeline instead of two. <code>level_icons</code> prepends any string (typically an emoji) per log level, no custom renderer required, and a failure still gets the full diagnostics box automatically.</p>
+
+      <div class="terminal" data-replay>
+        <div class="terminal-head">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="terminal-label">examples/colorful_errors_and_emojis.py</span>
+          <button class="terminal-replay-btn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+            <span>Replay</span>
+          </button>
+        </div>
+        <div class="terminal-body">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">▶</span> Story started: Checkout</div>
+<div class="term-line" style="animation-delay:42ms">  <span class="t-dim">▶</span> Stage started: Validate Cart</div>
+<div class="term-line" style="animation-delay:84ms">  🔍 cart contents loaded   <span class="t-dim">items=3</span></div>
+<div class="term-line" style="animation-delay:126ms">  ℹ️ cart validated</div>
+<div class="term-line" style="animation-delay:168ms">  <span class="t-ok">✔</span> Stage completed: Validate Cart (0.000s)</div>
+<div class="term-line" style="animation-delay:210ms">  <span class="t-dim">▶</span> Stage started: Apply Discount</div>
+<div class="term-line" style="animation-delay:272ms">  ⚠️ <span class="t-warn">promo code expired, falling back to full price</span>   <span class="t-dim">code=SUMMER25</span></div>
+<div class="term-line" style="animation-delay:314ms">  <span class="t-ok">✔</span> Stage completed: Apply Discount (0.000s)</div>
+<div class="term-line gap-before" style="animation-delay:356ms"><span class="t-dim">▶</span> Story ended: <span class="t-ok">SUCCESS</span> (0.001s)</div>
+<div class="term-line gap-before" style="animation-delay:488ms"><span class="t-dim">▶</span> Story started: Checkout</div>
+<div class="term-line" style="animation-delay:570ms">  <span class="t-dim">▶</span> Stage started: Reserve Inventory</div>
+<div class="term-line" style="animation-delay:612ms">  🔥 <span class="t-fail">stock check failed</span>   <span class="t-dim">sku=BOOT-42</span></div>
+<div class="term-line gap-before" style="animation-delay:714ms"><span class="t-fail">❌ Failure detected</span></div>
+<div class="term-line" style="animation-delay:846ms">  Error:      InsufficientStockError &mdash; only 0 units left for SKU BOOT-42</div>
+<div class="term-line" style="animation-delay:888ms">  Location:   <span class="t-warn">examples/colorful_errors_and_emojis.py:57</span></div>
+<div class="term-line gap-before" style="animation-delay:930ms">  <span class="t-hd">Why (exact):</span> the code explicitly raises InsufficientStockError here.</div>
+<div class="term-line gap-before" style="animation-delay:1012ms"><span class="t-dim">▶</span> Story ended: <span class="t-fail">FAILED</span> (0.002s)</div>
+        </div>
+      </div>
+      <p class="terminal-caption">The 🔍/ℹ️/⚠️/🔥 icons are three lines of config (<code>ConsoleRenderer(level_icons={...})</code>), not a custom renderer. Color and the story/stage glyphs are on by default. Details: <a href="/docs/renderers.html">Renderers</a>.</p>
+
+      <hr>
+
+      <h2>4. No more flooded logs from polling loops</h2>
+      <p>Status-polling loops — waiting on a pipeline, an upload, a job queue — are the classic source of log floods: one line per iteration, sometimes for minutes. <code>CoalescingRenderer</code> wraps any other renderer and collapses a run of identical back-to-back stages into a single summary line once it's clear they're repeating.</p>
+
+      <div class="compare-grid">
+        <div>
+          <div class="compare-label bad"><span class="dot"></span> Without CoalescingRenderer</div>
+          <div class="terminal" data-replay>
+            <div class="terminal-head">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span class="terminal-label">45 iterations → 90 lines</span>
+              <button class="terminal-replay-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+                <span>Replay</span>
+              </button>
+            </div>
+            <div class="terminal-body compact">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:42ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (2.010s)</div>
+<div class="term-line" style="animation-delay:84ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:126ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (2.005s)</div>
+<div class="term-line" style="animation-delay:168ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:210ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (1.998s)</div>
+<div class="term-line gap-before" style="animation-delay:252ms"><span class="t-dim">... 39 more identical start/complete pairs ...</span></div>
+<div class="term-line gap-before" style="animation-delay:354ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:436ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (2.012s)</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="compare-label good"><span class="dot"></span> With CoalescingRenderer</div>
+          <div class="terminal" data-replay>
+            <div class="terminal-head">
+              <div class="dots"><span></span><span></span><span></span></div>
+              <span class="terminal-label">45 iterations → 5 lines</span>
+              <button class="terminal-replay-btn" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+                <span>Replay</span>
+              </button>
+            </div>
+            <div class="terminal-body compact">
+<div class="term-line" style="animation-delay:0ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:42ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (2.010s)</div>
+<div class="term-line" style="animation-delay:84ms"><span class="t-dim">▶</span> Stage started: Check Pipeline Status</div>
+<div class="term-line" style="animation-delay:126ms"><span class="t-ok">✔</span> Stage completed: Check Pipeline Status (2.005s)</div>
+<div class="term-line gap-before" style="animation-delay:168ms"><span class="t-info">'Check Pipeline Status' repeated 43 more times (45 total) over 90.400s (avg 2.009s/call)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="terminal-caption">The wrapped renderer still sees the first two occurrences in full — so it's visible that polling started — before collapsing the rest. Machine-consumption renderers like <code>JsonRenderer</code> or <code>SqliteStoryRenderer</code> should stay unwrapped for full fidelity. Details: <a href="/docs/renderers.html#coalescingrenderer">CoalescingRenderer</a>.</p>
+
+      <div class="callout callout-tip">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.05V17h6v-.25c0-.85.4-1.55 1-2.05A7 7 0 0 0 12 2Z"/></svg>
+        <div>
+          <p class="callout-title">Try it on your own code</p>
+          <p>None of the above needed a rewrite — every demo is a normal function with <code>story()</code>/<code>stage()</code> wrapped around existing logic. Start with <a href="/docs/installation.html">Installation</a> and <a href="/docs/quickstart.html">Quick Start</a>, or browse every runnable script in <a href="/docs/examples.html">Examples</a>.</p>
+        </div>
+      </div>
+
+    </article>
+
+    <nav class="page-nav" id="page-nav" aria-label="Page navigation"></nav>
+  </main>
+
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>
