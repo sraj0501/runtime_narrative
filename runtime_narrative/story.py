@@ -244,8 +244,22 @@ class story:
         total_stages: int | None = None,
         dry_run: bool = False,
         module: str | None = None,
+        suppress_traceback: bool = False,
     ):
         from .renderer.console import ConsoleRenderer
+
+        # Off by default: the exception still propagates to the interpreter
+        # (or an outer try/except) after narration, matching plain `with`
+        # semantics. This matters beyond bare story() calls -- middleware,
+        # Celery's NarrativeTask, and NarrativeTaskGroup all depend on the
+        # exception propagating out of their own story() to drive HTTP error
+        # responses, task retries, and error aggregation respectively. Set
+        # suppress_traceback=True only on story() calls you fully own, once
+        # you've decided the FailureOccurred narration (type, message,
+        # location, stack summary, locals in rich mode) is enough on its own
+        # and nothing outside the `with story(...)` block needs to see the
+        # exception.
+        self.suppress_traceback = suppress_traceback
 
         if module is None:
             # Cheap caller-frame lookup (no stack walking / source reads, unlike
@@ -429,7 +443,7 @@ class story:
             current_stage_stack.reset(self._stack_token)
         if self._story_token is not None:
             current_story.reset(self._story_token)
-        return False
+        return exc_type is not None and self.suppress_traceback
 
     async def __aenter__(self) -> StoryRuntime:
         self._story_token = current_story.set(self.runtime)
@@ -522,7 +536,7 @@ class story:
             current_stage_stack.reset(self._stack_token)
         if self._story_token is not None:
             current_story.reset(self._story_token)
-        return False
+        return exc_type is not None and self.suppress_traceback
 
     async def _call_analyzer_async(
         self,

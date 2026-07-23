@@ -43,6 +43,55 @@ def test_sync_story_failure_emits_failure_with_diagnostics() -> None:
     assert "frame_0" in fail.locals_by_frame
 
 
+def test_sync_story_reraises_by_default() -> None:
+    cap = CapturingRenderer()
+    with pytest.raises(ValueError):
+        with story("S", renderers=[cap]):
+            raise ValueError("bad")
+
+
+def test_sync_story_suppress_traceback_swallows_exception() -> None:
+    cap = CapturingRenderer()
+    with story("S", renderers=[cap], suppress_traceback=True):
+        raise ValueError("bad")
+
+    names = [e.__class__.__name__ for e in cap.events]
+    assert "FailureOccurred" in names
+    assert cap.events[-1].success is False
+
+
+def test_sync_story_suppress_traceback_does_not_swallow_on_success() -> None:
+    cap = CapturingRenderer()
+    with story("S", renderers=[cap], suppress_traceback=True):
+        pass
+    assert cap.events[-1].success is True
+
+
+def test_async_story_suppress_traceback_swallows_exception() -> None:
+    cap = CapturingRenderer()
+
+    async def run() -> None:
+        async with story("S", renderers=[cap], suppress_traceback=True):
+            raise ValueError("bad")
+
+    asyncio.run(run())
+
+    names = [e.__class__.__name__ for e in cap.events]
+    assert "FailureOccurred" in names
+    assert cap.events[-1].success is False
+
+
+def test_async_story_reraises_by_default() -> None:
+    cap = CapturingRenderer()
+
+    async def run() -> None:
+        async with story("S", renderers=[cap]):
+            raise ValueError("bad")
+
+    with pytest.raises(ValueError):
+        asyncio.run(run())
+
+
 def test_sync_story_production_forces_lean() -> None:
     cap = CapturingRenderer()
     with pytest.raises(ValueError):

@@ -325,10 +325,13 @@ class ConsoleRenderer:
 
             if self._log_renderer is not None:
                 icon = self._level_icons.get(event.level.lower(), "")
+                # No "timestamp" key here: the story tag just printed on this
+                # line (`_story_tag()`, above) already carries it, and passing
+                # a duplicate through to structlog's ConsoleRenderer makes it
+                # render a second one (see issue #41).
                 event_dict: dict[str, Any] = {
                     "event": f"{icon}{event.message}" if icon else event.message,
                     "level": event.level.lower(),
-                    "timestamp": event.timestamp.isoformat(timespec="seconds"),
                 }
                 if event.logger_name:
                     event_dict["logger"] = event.logger_name

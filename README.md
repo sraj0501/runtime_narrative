@@ -224,6 +224,32 @@ Run: `uv run python examples/colorful_errors_and_emojis.py` — full reference: 
 
 ---
 
+## Suppressing the raw traceback
+
+By design, `story()` narrates a failure (`FailureOccurred`: type, message, location, stack summary, locals in rich mode) and then still re-raises the exception — same as a plain `with`/`try` block. That means, unless something else catches it, Python's own uncaught-exception handler prints its raw traceback right after the narration:
+
+```
+2026-07-23 23:34:16.147 [e1a667] ▶ Story ended: FAILED (0.003s)
+
+Traceback (most recent call last):
+  File "main.py", line 268, in main
+    raise AssertionError(f"{len(failures)} linked-list checks failed")
+AssertionError: 5 linked-list checks failed
+```
+
+If the narrative already tells you everything you need and you don't want that second, redundant traceback, pass `suppress_traceback=True` — `story()` swallows the exception after emitting `FailureOccurred`/`StoryCompleted` instead of re-raising it:
+
+```python
+with story("Linked List Checks", suppress_traceback=True):
+    run_checks()  # narrated on failure; nothing propagates past this block
+```
+
+**This defaults to `False` and should stay that way for any `story()` you don't fully control the surrounding code for.** `RuntimeNarrativeMiddleware`, Celery's `NarrativeTask`, and `NarrativeTaskGroup` each open their own `story()` internally and rely on the exception propagating out of it — that's how a failed request becomes an HTTP 500, a failed task gets retried, and a failed sub-task shows up in `NarrativeTaskGroupError`. Turning this on for those would silently turn failures into "successes." Only set it on top-level `story()` calls you own, where you've already decided nothing outside the block needs to see the exception — e.g. a script's `main()`, or a batch job that logs and moves on to the next item.
+
+Full reference: [WIKI §5](WIKI.md#5-story--the-story-context-manager).
+
+---
+
 ## Feature tour
 
 Everything below works the same way in every context (sync/async, decorators, auto-instrumentation, any framework middleware). One line each here; full detail and every parameter in the Wiki.
@@ -240,6 +266,7 @@ Everything below works the same way in every context (sync/async, decorators, au
 | Persistence & CLI | `SqliteStoryRenderer` + `runtime-narrative failures` / `runtime-narrative story <id>` | [WIKI §13](WIKI.md#13-sqlite-persistence-and-cli) |
 | Testing | `StoryRecorder` — dual sync/async assertion API, no output produced | [WIKI §14](WIKI.md#14-testing-with-storyrecorder) |
 | `dry_run` mode | Suppress stage-body exceptions; verify instrumentation wiring with no side effects | [WIKI §15](WIKI.md#15-dry_run-mode) |
+| `suppress_traceback` | Swallow the exception after narrating it, so Python's own uncaught-exception traceback isn't printed on top — off by default, see [above](#suppressing-the-raw-traceback) | [WIKI §5](WIKI.md#5-story--the-story-context-manager) |
 | Custom renderers/analyzers | Any `handle(event)` object is a renderer; any `analyze_failure(...)` object is an analyzer | [WIKI §17](WIKI.md#17-custom-renderers), [§18](WIKI.md#18-custom-failure-analyzers) |
 | Utilities | `has_active_story()`, `stage(optional=True)` for library code that may run with or without a story | [WIKI §6](WIKI.md#6-stage--stage-context-managers) |
 | `StoryRuntime.record_failure()` | Record a failure in saga/rollback flows without owning exception propagation | [WIKI §5](WIKI.md#5-story--the-story-context-manager) |
