@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>runtime-narrative — Turn Python execution into a traceable story</title>
+<meta name="description" content="Model Python execution as human-readable stories with lean/rich failure diagnostics and optional LLM-powered analysis. Minimal logs when it works, surgical diagnostics the moment it breaks.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+<style>
+  .hero {
+    padding: 84px 20px 60px; text-align: center; max-width: 900px; margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650;
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--text-soft); margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-size: 3.2rem; line-height: 1.08; letter-spacing: -0.03em; font-weight: 800; margin: 0 0 20px;
+  }
+  .hero h1 span { background: linear-gradient(120deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.sub {
+    font-size: 1.2rem; color: var(--text-soft); max-width: 640px; margin: 0 auto 34px; line-height: 1.55;
+  }
+  .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 54px; }
+  .hero-terminal {
+    text-align: left; max-width: 760px; margin: 0 auto; border-radius: 14px; overflow: hidden;
+    background: var(--code-bg); border: 1px solid var(--code-border); box-shadow: var(--shadow);
+  }
+  .hero-terminal-head {
+    display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--code-border);
+  }
+  .hero-terminal-head span { width: 11px; height: 11px; border-radius: 50%; background: #3a4150; }
+  .hero-terminal pre {
+    margin: 0; padding: 22px 24px 26px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.75;
+    color: var(--code-text); overflow-x: auto;
+  }
+  .t-ok { color: #34d399; } .t-fail { color: #f87171; } .t-dim { color: #6b7480; } .t-hd { color: #f0ad4e; font-weight: 600; }
+
+  section.section { max-width: 1100px; margin: 0 auto; padding: 70px 20px; }
+  .section-head { text-align: center; max-width: 620px; margin: 0 auto 40px; }
+  .section-head .eyebrow { color: var(--accent); font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+  .section-head h2 { font-size: 2rem; letter-spacing: -0.02em; margin: 0 0 12px; font-weight: 800; }
+  .section-head p { color: var(--text-soft); font-size: 1.05rem; line-height: 1.55; margin: 0; }
+
+  .install-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+  .install-row .code-block { flex: 1; min-width: 280px; margin: 0; }
+
+  .strip {
+    background: var(--bg-soft); border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft);
+  }
+
+  .quickstart-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
+
+  @media (max-width: 720px) {
+    .hero h1 { font-size: 2.2rem; }
+    .hero p.sub { font-size: 1.05rem; }
+  }
+</style>
+</head>
+<body data-page="home">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="layout landing">
+  <main class="content">
+
+    <section class="hero">
+      <span class="hero-badge">✦ v1.5.4 — Python 3.9+</span>
+      <h1>Turn any Python execution into a<br><span>traceable story</span></h1>
+      <p class="sub">Minimal logs when everything works. Surgical, LLM-powered diagnostics the moment something breaks. No restructuring of existing code required.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="/docs/installation.html">Get Started →</a>
+        <a class="btn btn-ghost" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+
+      <div class="hero-terminal">
+        <div class="hero-terminal-head"><span></span><span></span><span></span></div>
+        <pre>▶ Story started: Import Customers
+<span class="t-ok">✔</span> Load CSV           0.012s
+<span class="t-ok">✔</span> Validate Data      0.004s
+
+<span class="t-fail">❌ Failure at: Insert Records</span>
+
+  ValueError: duplicate customer id
+  Location:   app/db.py:47  insert_row
+  Code:       raise ValueError("duplicate customer id")
+  Chain:      ValueError ← sqlite3.IntegrityError
+
+  <span class="t-hd">## Exact Why</span>
+  A record with the same customer_id already exists (UNIQUE constraint).
+
+  <span class="t-hd">## Targeted Fix</span>
+  Use INSERT OR IGNORE, or check for an existing row before inserting.</pre>
+      </div>
+    </section>
+
+    <div class="strip">
+      <section class="section" style="padding-top:56px;padding-bottom:56px;">
+        <div class="section-head">
+          <div class="eyebrow">Why runtime-narrative</div>
+          <h2>Built for how engineers already talk about failures</h2>
+          <p>"We ran Import Customers, it loaded the CSV, validated the rows, then failed during Insert Records." That's exactly what the library captures — automatically.</p>
+        </div>
+        <div class="grid-cards cols-3">
+          <div class="card">
+            <div class="card-icon">▶</div>
+            <div class="card-title">Stories and stages</div>
+            <p><code>story()</code> / <code>stage()</code> are dual sync/async context managers — or decorators, or auto-instrumentation. No restructuring needed.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">↳</div>
+            <div class="card-title">Sub-story tracing</div>
+            <p>Nest a <code>story()</code> inside an active one and it auto-links as a traceable child with its own success/failure and duration — no new API.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">≡</div>
+            <div class="card-title">Lean by default, rich on demand</div>
+            <p>A compressed stack summary and exact failure frame always; local-variable capture with automatic secret redaction only when you ask.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">✦</div>
+            <div class="card-title">Optional LLM diagnosis</div>
+            <p>Ollama, any OpenAI-compatible endpoint, or Anthropic Claude turns a traceback into an exact-cause explanation and a targeted fix.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">⇄</div>
+            <div class="card-title">Bring your own everything</div>
+            <p>Any object with <code>handle(event)</code> is a renderer; any object with <code>analyze_failure(...)</code> is an analyzer.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">▣</div>
+            <div class="card-title">Ships with real integrations</div>
+            <p>Console, JSON, SQLite, OpenTelemetry, Prometheus, HTML, webhooks, FastAPI, Django, Celery, gRPC — all built in.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="eyebrow">Get started in a minute</div>
+        <h2>Install, then wrap your code</h2>
+        <p>The core package has no required dependencies beyond the standard library and <code>python-dotenv</code>.</p>
+      </div>
+
+      <div class="install-row">
+        <div class="code-block has-head">
+          <div class="code-block-head"><span>bash</span></div>
+          <pre><code class="language-bash">pip install runtime-narrative</code></pre>
+        </div>
+        <div class="code-block has-head">
+          <div class="code-block-head"><span>bash</span></div>
+          <pre><code class="language-bash">pip install "runtime-narrative[console,fastapi,anthropic]"</code></pre>
+        </div>
+      </div>
+
+      <div class="code-block has-head" style="margin-top:16px;">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage
+
+with story("Import Customers"):
+    with stage("Load CSV"):
+        rows = load_csv("customers.csv")
+    with stage("Validate Data"):
+        validate(rows)
+    with stage("Insert Records"):
+        db.insert(rows)</code></pre>
+      </div>
+      <p style="text-align:center;margin-top:24px;">
+        <a class="btn btn-ghost" href="/docs/quickstart.html">Read the full Quick Start →</a>
+      </p>
+    </section>
+
+    <div class="strip">
+      <section class="section" style="padding-top:56px;">
+        <div class="section-head">
+          <div class="eyebrow">Feature tour</div>
+          <h2>Everything works the same way everywhere</h2>
+          <p>Sync/async, decorators, auto-instrumentation, any framework middleware — one line here, full detail in the docs.</p>
+        </div>
+        <div class="grid-cards cols-3">
+          <a class="card" href="/docs/decorators.html">
+            <div class="card-title">Decorators</div>
+            <p><code>@runtime_narrative_story</code> / <code>@runtime_narrative_stage</code> — wrap functions without restructuring call sites.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/auto-instrumentation.html">
+            <div class="card-title">Auto-instrumentation</div>
+            <p><code>@narrative_class</code>, <code>instrument_module()</code>, <code>auto_instrument()</code> — zero call-site changes.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/diagnostics.html">
+            <div class="card-title">Failure diagnostics</div>
+            <p>Lean/rich modes, production traceback caps, secret redaction, <code>FailureDiagnosticsConfig</code>.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/renderers.html">
+            <div class="card-title">Renderers</div>
+            <p>Console, JSON, SQLite, OpenTelemetry, Prometheus, HTML reports, webhook alert routing.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/integrations.html">
+            <div class="card-title">Framework integrations</div>
+            <p>FastAPI/Starlette middleware, Django ASGI/WSGI, Celery task base class, gRPC interceptors.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/task-groups.html">
+            <div class="card-title">Async task groups</div>
+            <p><code>NarrativeTaskGroup</code> — concurrent asyncio tasks under one shared story.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/persistence-cli.html">
+            <div class="card-title">Persistence &amp; CLI</div>
+            <p><code>SqliteStoryRenderer</code> plus <code>runtime-narrative failures</code> / <code>story &lt;id&gt;</code>.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/testing.html">
+            <div class="card-title">Testing</div>
+            <p><code>StoryRecorder</code> — a dual sync/async assertion API that produces no output.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+          <a class="card" href="/docs/substories-logging.html">
+            <div class="card-title">Sub-stories &amp; log capture</div>
+            <p>End-to-end call tracing, plus folding existing <code>logging</code> calls into one event stream.</p>
+            <div class="card-ref">Learn more →</div>
+          </a>
+        </div>
+      </section>
+    </div>
+
+    <section class="section" style="text-align:center;padding-bottom:100px;">
+      <h2 style="font-size:1.8rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:14px;">Ready to see it fail on purpose?</h2>
+      <p style="color:var(--text-soft);max-width:520px;margin:0 auto 28px;">Every example in the docs is a runnable script. Start with the Quick Start, or jump straight to the full API reference.</p>
+      <div class="hero-ctas" style="margin-bottom:0;">
+        <a class="btn btn-primary" href="/docs/quickstart.html">Quick Start →</a>
+        <a class="btn btn-ghost" href="/docs/events.html">Event Reference</a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>
