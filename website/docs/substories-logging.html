@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sub-stories &amp; Log Capture — runtime-narrative</title>
+<meta name="description" content="Trace nested story calls as a linked tree and capture existing logging calls into the same event stream with NarrativeLogHandler.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="substories-logging">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html" class="active">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="sidebar-search-input" type="search" placeholder="Filter docs…" autocomplete="off">
+    </div>
+    <div id="sidebar-nav"><div class="nav-empty">Loading…</div></div>
+  </nav>
+
+  <main class="content">
+    <article class="prose">
+      <h1>Sub-stories &amp; Log Capture</h1>
+      <p class="lede">Nest <code>story()</code> calls to trace a request end-to-end across function and service boundaries, and route existing <code>logging</code> calls into the same event stream instead of a second, disconnected log.</p>
+
+      <h2>Sub-stories: end-to-end call tracing</h2>
+      <p><code>story()</code> opened while another <code>story()</code> is already active (in the same sync/async context) automatically becomes a <strong>sub-story</strong> — no new API. It:</p>
+      <ul>
+        <li>Inherits <code>renderers</code>, <code>diagnostics_config</code>, and <code>failure_analyzer</code> from the parent unless you pass your own explicitly.</li>
+        <li>Sets <code>parent_story_id</code> to the parent's <code>story_id</code>.</li>
+        <li>Sets <code>root_story_id</code> to the top-most ancestor's <code>story_id</code> (so a 3-level nesting all shares one <code>root_story_id</code>).</li>
+        <li>Still succeeds/fails and times itself independently — a failed sub-story does not automatically fail its parent.</li>
+      </ul>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">async def execute_query(sql: str):
+    async with story(f"DB: {sql}") as db_story:           # auto-linked to whatever story is active
+        async with stage("Execute Query"):
+            await conn.execute(sql)
+
+async def create_order():
+    async with story("POST /orders") as api_story:
+        async with stage("Persist Order"):
+            await execute_query("INSERT INTO orders ...")
+            # execute_query's story is a sub-story of api_story:
+            #   parent_story_id == api_story.story_id
+            #   root_story_id   == api_story.story_id</code></pre>
+      </div>
+
+      <p><code>ConsoleRenderer</code> renders the resulting call tree directly, tagging every line with a <code>[short_id]</code> (the first 6 characters of that event's <code>story_id</code>), coloring a whole story family (a root story plus any sub-stories) the same deterministic color, and indenting by nesting depth so the call tree renders directly in the log:</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>text</span></div>
+        <pre><code class="language-text">[ad8cc2] ▶ Story started: POST /orders
+  [ad8cc2] ▶ Stage started: Persist Order
+    [d17c63] ▶ Story started: DB: INSERT orders
+      [d17c63] ▶ Stage started: Execute Query
+      [d17c63] ✔ Stage completed: Execute Query (0.021s)
+    [d17c63] ▶ Story ended: SUCCESS (0.034s)
+  [ad8cc2] ✔ Stage completed: Persist Order (0.034s)
+[ad8cc2] ▶ Story ended: SUCCESS (0.052s)</code></pre>
+      </div>
+
+      <p>The indent level for each story is tracked per <code>story_id</code> internally (base indent for a sub-story = parent's indent + parent's currently-open stage depth + 1) and cleaned up when that story's <code>StoryCompleted</code> is handled, so long-running processes don't leak memory per story.</p>
+
+      <p>This holds up under concurrency for free: <code>asyncio.Task</code> copies <code>ContextVar</code> state at creation time, and each OS thread starts with a fresh top-level context, so many concurrent callers sharing one helper (like <code>execute_query</code> above) never cross-link into each other's story tree. <code>OtelRenderer</code> uses <code>parent_story_id</code> to make sub-stories real child spans of their parent span.</p>
+
+      <p>Run: <code>uv run python examples/substory_db_call.py</code></p>
+
+      <h2>NarrativeLogHandler: capture existing logging calls</h2>
+      <p><code>NarrativeLogHandler</code> folds <code>logging.warning()</code>/<code>.error()</code> into the same event pipeline as <code>story()</code>/<code>stage()</code> — one stream instead of two, tagged with the story/stage it happened in. Each captured record becomes a <code>LogRecorded</code> event.</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">import logging
+from runtime_narrative import NarrativeLogHandler
+
+logging.getLogger().addHandler(NarrativeLogHandler(level=logging.WARNING))</code></pre>
+      </div>
+
+      <p>Outside an active story, records fall through to an optional <code>fallback</code> handler so nothing outside instrumentation is silently dropped:</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">NarrativeLogHandler(level=logging.WARNING, fallback=logging.StreamHandler())</code></pre>
+      </div>
+
+      <div class="callout callout-note">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p class="callout-title">Same colors, same indentation as the story tree</p>
+          <p><code>ConsoleRenderer</code> tags every rendered line — including <code>LogRecorded</code> — with the same <code>[short_id]</code>, story-family color, and nesting-depth indentation used for stories and stages, so captured log lines slot directly into the call tree shown above rather than appearing as a separate stream.</p>
+        </div>
+      </div>
+
+      <p>Run: <code>uv run python examples/logging_bridge.py</code></p>
+
+      <h2>Structured fields, custom styles, and per-story routing</h2>
+      <p><code>extra={...}</code> passed to a captured logging call becomes <code>LogRecorded.fields</code>:</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">logger.warning("cache miss", extra={"order_id": "ORD-42"})</code></pre>
+      </div>
+
+      <p>With the <code>structlog</code> extra installed, <code>ConsoleRenderer</code> renders <code>LogRecorded</code> using structlog's own default console style — colored level, timestamp, message, then <code>fields</code> as <code>key=value</code>:</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>text</span></div>
+        <pre><code class="language-text">[d9e653] 2026-07-01T16:28:34 [warning  ] cache miss    order_id=ORD-42 stage=Fetch</code></pre>
+      </div>
+
+      <p>Without <code>structlog</code>, a plain equivalent (<code>WARNING [stage] logger: message  key=value ...</code>) is used — no hard dependency either way. Two <code>ConsoleRenderer</code> constructor options let you customize further without writing a renderer from scratch:</p>
+      <table>
+        <thead><tr><th>Option</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>log_renderer=&lt;callable&gt;</code></td><td>Any <code>(logger, name, event_dict) -&gt; str</code> callable, e.g. a custom structlog processor/renderer.</td></tr>
+          <tr><td><code>level_icons={"warning": "⚠ ", "error": "✗ "}</code></td><td>Prefix string per lowercase level name, prepended to the message. Empty by default.</td></tr>
+        </tbody>
+      </table>
+
+      <p>For routing different story families to different styles or destinations, <code>FilteredRenderer(predicate, renderer)</code> wraps any renderer and only forwards events where the predicate returns <code>True</code> — every event carries <code>story_name</code>, so this covers cases like "all <code>GET ...</code> request stories render differently from everything else":</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import ConsoleRenderer, FilteredRenderer
+
+renderers = [
+    FilteredRenderer(lambda e: e.story_name.startswith("GET "), ConsoleRenderer()),
+    FilteredRenderer(lambda e: not e.story_name.startswith("GET "), ConsoleRenderer(level_icons={"error": "X "})),
+]</code></pre>
+      </div>
+
+      <p>Run: <code>uv run python examples/structured_log_routing.py</code></p>
+      <p>For a combined look at colorful failure output plus emoji <code>level_icons</code> across every log level, run: <code>uv run python examples/colorful_errors_and_emojis.py</code></p>
+
+      <div class="callout callout-note">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p class="callout-title">Next step</p>
+          <p>Continue to <a href="/docs/persistence-cli.html">SQLite Persistence &amp; CLI</a> to store the full story/stage/event history and query it after the fact.</p>
+        </div>
+      </div>
+
+    </article>
+
+    <nav class="page-nav" id="page-nav" aria-label="Page navigation"></nav>
+  </main>
+
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Failure Diagnostics — runtime-narrative</title>
+<meta name="description" content="Configure lean vs. rich failure diagnostics, secret redaction, and built-in LLM failure analyzers with FailureDiagnosticsConfig.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="diagnostics">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html" class="active">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="sidebar-search-input" type="search" placeholder="Filter docs…" autocomplete="off">
+    </div>
+    <div id="sidebar-nav"><div class="nav-empty">Loading…</div></div>
+  </nav>
+
+  <main class="content">
+    <article class="prose">
+      <h1>Failure Diagnostics</h1>
+      <p class="lede">When an exception escapes a story, <code>runtime-narrative</code> builds an <code>EnrichedFailure</code> and emits it as a <code>FailureOccurred</code> event. How much information the failure contains is controlled by <code>FailureDiagnosticsConfig</code>.</p>
+
+      <h2>9.1 Lean mode (default)</h2>
+      <p>Lean mode adds no overhead beyond reading the traceback. It collects:</p>
+      <ul>
+        <li><strong>Primary frame</strong>: the innermost app-code frame in the traceback (falling back to innermost non-stdlib, then the leaf frame). The frame's filename, line number, function name, and source line are included.</li>
+        <li><strong>Source snippet</strong>: a few lines of source context around the primary frame (<code>snippet_context_lines=2</code> on each side by default).</li>
+        <li><strong>Compressed stack summary</strong>: a one-line count like <code>"2 app frame(s), 5 other/hidden in full stack (7 total)"</code>.</li>
+        <li><strong>Exception chain</strong>: a human-readable description of any chained <code>__cause__</code> or <code>__context__</code> exceptions.</li>
+      </ul>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage, FailureDiagnosticsConfig
+
+lean_config = FailureDiagnosticsConfig(failure_diagnostics="lean")
+
+try:
+    with story("Checkout", diagnostics_config=lean_config):
+        with stage("Charge Card"):
+            raise ValueError("card declined: insufficient funds")
+except ValueError:
+    pass</code></pre>
+      </div>
+
+      <h2>9.2 Rich mode</h2>
+      <p>Rich mode additionally captures local variable values from the primary frame and up to one enclosing frame. This is invaluable for debugging because it shows the exact values in scope at the point of failure.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage, FailureDiagnosticsConfig
+
+rich_config = FailureDiagnosticsConfig(failure_diagnostics="rich")
+
+def process_payment(card_number: str, amount: float) -> None:
+    retries = 3
+    raise ValueError("gateway timeout")
+
+try:
+    with story("Checkout", diagnostics_config=rich_config):
+        with stage("Charge Card"):
+            process_payment("4111111111111111", 99.99)
+except ValueError:
+    pass
+# FailureOccurred.locals_by_frame contains: amount=99.99, retries=3
+# card_number is NOT redacted by default — add redact_extra=("card_number",) to redact it</code></pre>
+      </div>
+
+      <h3>FailureDiagnosticsConfig field reference</h3>
+      <table>
+        <thead><tr><th>Field</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>runtime_environment</code></td><td><code>"development"</code></td><td><code>"development"</code> or <code>"production"</code></td></tr>
+          <tr><td><code>failure_diagnostics</code></td><td><code>"lean"</code></td><td><code>"lean"</code> or <code>"rich"</code></td></tr>
+          <tr><td><code>allow_rich_in_production</code></td><td><code>False</code></td><td>Bypass the production safety guard</td></tr>
+          <tr><td><code>app_roots</code></td><td><code>()</code></td><td>Directories whose frames are labeled "app" for primary frame selection. Defaults to cwd when empty.</td></tr>
+          <tr><td><code>redact_extra</code></td><td><code>()</code></td><td>Additional key substrings to redact (case-insensitive substring match)</td></tr>
+          <tr><td><code>redact_patterns</code></td><td><code>()</code></td><td>Regex patterns matched against local variable key names</td></tr>
+          <tr><td><code>redact_callback</code></td><td><code>None</code></td><td><code>Callable[[str], bool]</code> — return <code>True</code> to redact the key</td></tr>
+          <tr><td><code>max_traceback_chars</code></td><td><code>12_000</code></td><td>Truncate traceback text in development at this length</td></tr>
+          <tr><td><code>production_traceback_cap</code></td><td><code>8_000</code></td><td>Traceback cap applied in production</td></tr>
+          <tr><td><code>max_locals_per_frame</code></td><td><code>12</code></td><td>Maximum local variables captured per frame</td></tr>
+          <tr><td><code>max_local_value_len</code></td><td><code>200</code></td><td>Maximum character length for a single variable's repr</td></tr>
+          <tr><td><code>max_local_depth</code></td><td><code>2</code></td><td>Recursion depth when serializing nested containers</td></tr>
+          <tr><td><code>max_frames_with_locals</code></td><td><code>2</code></td><td>Number of frames (starting at primary) for which locals are captured</td></tr>
+          <tr><td><code>snippet_context_lines</code></td><td><code>2</code></td><td>Lines of source before and after the primary line</td></tr>
+        </tbody>
+      </table>
+
+      <h2>9.3 Production mode</h2>
+      <p>In production, two safety behaviors are enforced automatically:</p>
+      <ol>
+        <li>The traceback is truncated at <code>production_traceback_cap</code> (default 8 000 characters).</li>
+        <li>Rich mode is forced to lean unless <code>allow_rich_in_production=True</code> is explicitly set.</li>
+      </ol>
+
+      <div class="callout callout-warning">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <div>
+          <p class="callout-title">Rich diagnostics are forced to lean in production</p>
+          <p>If <code>runtime_environment="production"</code> and <code>failure_diagnostics="rich"</code> are both set, the effective mode is silently downgraded to <code>lean</code> unless you explicitly pass <code>allow_rich_in_production=True</code>. This exists to stop local variable values — potentially including secrets — from being captured in a production failure path by accident.</p>
+        </div>
+      </div>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage, FailureDiagnosticsConfig
+
+prod_config = FailureDiagnosticsConfig(
+    runtime_environment="production",
+    failure_diagnostics="lean",
+)
+
+try:
+    with story("Checkout", diagnostics_config=prod_config):
+        with stage("Charge Card"):
+            raise RuntimeError("connection pool exhausted")
+except RuntimeError:
+    pass</code></pre>
+      </div>
+
+      <p>To use rich mode in production (e.g., a controlled staging environment):</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">prod_rich = FailureDiagnosticsConfig(
+    runtime_environment="production",
+    failure_diagnostics="rich",
+    allow_rich_in_production=True,
+)</code></pre>
+      </div>
+
+      <p>Production mode can also be set without constructing a full config:</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">with story("Job", runtime_environment="production", failure_diagnostics="lean"):
+    ...</code></pre>
+      </div>
+
+      <h2>9.4 Secret redaction</h2>
+      <p>When rich mode captures local variables, any variable whose name matches a redacted pattern has its value replaced with <code>"&lt;redacted&gt;"</code>. The count of redacted keys is reported in <code>FailureOccurred.redaction_removed_keys</code>.</p>
+
+      <h3>Built-in redacted key substrings</h3>
+      <p>Case-insensitive, substring match: <code>password</code>, <code>secret</code>, <code>token</code>, <code>api_key</code>, <code>apikey</code>, <code>authorization</code>, <code>cookie</code>, <code>session</code>, <code>credential</code>.</p>
+
+      <h3>redact_extra — additional substrings</h3>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">config = FailureDiagnosticsConfig(
+    failure_diagnostics="rich",
+    redact_extra=("card_number", "cvv", "ssn"),
+)
+
+def pay(card_number: str, cvv: str, amount: float) -> None:
+    raise ValueError("declined")
+
+try:
+    with story("Payment", diagnostics_config=config):
+        with stage("Charge"):
+            pay("4111111111111111", "123", 99.99)
+except ValueError:
+    pass
+# card_number → &lt;redacted&gt;, cvv → &lt;redacted&gt;, amount → 99.99</code></pre>
+      </div>
+
+      <h3>redact_patterns — regular expressions matched against variable names</h3>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">config = FailureDiagnosticsConfig(
+    failure_diagnostics="rich",
+    redact_patterns=(
+        r"pan$",        # matches card_pan, account_pan
+        r"^priv_",      # matches priv_key, priv_cert
+        r"_hash$",      # matches pw_hash, token_hash
+    ),
+)</code></pre>
+      </div>
+
+      <h3>redact_callback — a custom predicate for arbitrary logic</h3>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">config = FailureDiagnosticsConfig(
+    failure_diagnostics="rich",
+    redact_callback=lambda key: key.endswith("_ref") or key.startswith("internal_"),
+)</code></pre>
+      </div>
+
+      <p>All three mechanisms compose additively — specifying <code>redact_extra</code> does not disable the built-in list.</p>
+
+      <h2>9.5 from_env() and environment variable overrides</h2>
+      <p><code>FailureDiagnosticsConfig.from_env()</code> reads configuration from environment variables:</p>
+
+      <table>
+        <thead><tr><th>Environment variable</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>RUNTIME_NARRATIVE_ENV</code></td><td>Sets <code>runtime_environment</code>. Values: <code>development</code> (default), <code>production</code></td></tr>
+          <tr><td><code>RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS</code></td><td>Sets <code>failure_diagnostics</code>. Values: <code>lean</code> (default), <code>rich</code></td></tr>
+          <tr><td><code>RUNTIME_NARRATIVE_ALLOW_RICH_IN_PRODUCTION</code></td><td>Sets <code>allow_rich_in_production</code>. Values: <code>1</code>, <code>true</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>When you construct <code>story(...)</code> without passing <code>diagnostics_config</code>, the story internally calls <code>from_env()</code> as the base and applies any kwargs on top of it via <code>merge()</code>. This means you can change diagnostic depth across all stories in a process by setting environment variables — useful for debugging in non-production environments.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>bash</span></div>
+        <pre><code class="language-bash"># Enable rich diagnostics for a single run without code changes
+RUNTIME_NARRATIVE_FAILURE_DIAGNOSTICS=rich python examples/basic.py</code></pre>
+      </div>
+
+      <h2>9.6 FailureDiagnosticsConfig.merge()</h2>
+      <p><code>merge()</code> creates a new config by overlaying specified fields onto an existing base config. Fields you do not specify are inherited from the base unchanged.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import FailureDiagnosticsConfig
+
+base = FailureDiagnosticsConfig.from_env()
+
+# Specialise for a single story
+per_story = FailureDiagnosticsConfig.merge(
+    base,
+    failure_diagnostics="rich",
+    redact_extra=("card_number", "cvv"),
+)
+
+# Specialise for production
+prod = FailureDiagnosticsConfig.merge(
+    base,
+    runtime_environment="production",
+    failure_diagnostics="lean",
+)</code></pre>
+      </div>
+
+      <h2>9.7 Built-in failure analyzers</h2>
+      <p>Failure analyzers attach LLM-generated explanations to <code>FailureOccurred</code>. Pass any analyzer as <code>failure_analyzer=</code> to <code>story()</code>, a decorator, or middleware. See <a href="/docs/custom-analyzers.html">Custom Failure Analyzers</a> to write your own.</p>
+
+      <h3>OllamaFailureAnalyzer</h3>
+      <p>Uses Ollama's native <code>/api/generate</code> endpoint. A dataclass — pass fields as constructor arguments.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import OllamaFailureAnalyzer, story, stage
+
+analyzer = OllamaFailureAnalyzer(
+    model="llama3",
+    endpoint="http://127.0.0.1:11434/api/generate",  # default
+    timeout_seconds=30.0,
+    max_context_chars=8000,
+)
+
+try:
+    with story("Pipeline", failure_analyzer=analyzer):
+        with stage("Load"):
+            raise ValueError("source file missing")
+except ValueError:
+    pass</code></pre>
+      </div>
+
+      <table>
+        <thead><tr><th>Field</th><th>Default</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>model</code></td><td>required</td><td>Ollama model name</td></tr>
+          <tr><td><code>endpoint</code></td><td><code>"http://127.0.0.1:11434/api/generate"</code></td><td>Ollama API endpoint</td></tr>
+          <tr><td><code>timeout_seconds</code></td><td><code>12.0</code></td><td>HTTP timeout</td></tr>
+          <tr><td><code>include_traceback_lines</code></td><td><code>30</code></td><td>Lines of traceback sent in the prompt</td></tr>
+          <tr><td><code>max_context_chars</code></td><td><code>8000</code></td><td>Total prompt character budget; traceback is trimmed to fit</td></tr>
+        </tbody>
+      </table>
+
+      <h3>LLMFailureAnalyzer</h3>
+      <p>OpenAI-compatible <code>/v1/chat/completions</code> endpoint. Works with vLLM, llama.cpp, LM Studio, and Ollama in OpenAI mode.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import LLMFailureAnalyzer
+
+analyzer = LLMFailureAnalyzer(
+    model="llama3",
+    endpoint="http://localhost:8000/v1/chat/completions",
+    timeout_seconds=30.0,
+)</code></pre>
+      </div>
+
+      <p>Both <code>OllamaFailureAnalyzer</code> and <code>LLMFailureAnalyzer</code> request structured JSON from the model (<code>exact_why</code>, <code>evidence</code>, <code>targeted_fix</code>, <code>code_changes</code>) and format the response into <code>## Exact Why / ## Evidence / ## Targeted Fix / ## Code Changes</code> sections. If the model returns non-JSON, the raw text is used as a fallback.</p>
+
+      <h3>AnthropicFailureAnalyzer</h3>
+      <p>Calls the Anthropic API. Requires the <code>[anthropic]</code> extra and <code>ANTHROPIC_API_KEY</code>.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import AnthropicFailureAnalyzer
+
+analyzer = AnthropicFailureAnalyzer(
+    model="claude-haiku-4-5-20251001",  # default; override via RUNTIME_NARRATIVE_MODEL
+    api_key=None,                        # reads ANTHROPIC_API_KEY
+    timeout_seconds=30.0,
+    max_tokens=1024,
+)</code></pre>
+      </div>
+
+      <p>Provides both <code>analyze_failure</code> (sync, using <code>anthropic.Anthropic</code>) and <code>analyze_failure_async</code> (async, using <code>anthropic.AsyncAnthropic</code>). Response parsing identical to the OpenAI-compatible analyzers.</p>
+
+      <h3>DeduplicatingAnalyzer</h3>
+      <p>Wraps any analyzer to avoid repeat API calls for the same error site.</p>
+
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import AnthropicFailureAnalyzer, DeduplicatingAnalyzer
+
+inner = AnthropicFailureAnalyzer()
+analyzer = DeduplicatingAnalyzer(inner, max_cache_size=256)</code></pre>
+      </div>
+
+      <p>The cache key is a SHA-256 hash of <code>(error_type, filename, lineno, exception_chain)</code>. <code>None</code> results (network failures, timeouts) are never cached — the next call retries the model. LRU eviction applies when the cache reaches <code>max_cache_size</code>. Thread-safe. Delegates to <code>inner.analyze_failure_async()</code> when available.</p>
+
+      <div class="callout callout-note">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p class="callout-title">Next step</p>
+          <p>Read <a href="/docs/custom-analyzers.html">Custom Failure Analyzers</a> to implement your own analyzer against the <code>analyze_failure</code> protocol.</p>
+        </div>
+      </div>
+
+    </article>
+
+    <nav class="page-nav" id="page-nav" aria-label="Page navigation"></nav>
+  </main>
+
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

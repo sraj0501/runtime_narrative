@@ -26,6 +26,7 @@ def runtime_narrative_story(
     failure_diagnostics: str | None = None,
     allow_rich_in_production: bool | None = None,
     app_roots: Sequence[str] | None = None,
+    suppress_traceback: bool = False,
 ) -> Callable[[F], F]:
     """Decorator to wrap a function in a story context (sync or async)."""
 
@@ -41,6 +42,7 @@ def runtime_narrative_story(
             "failure_diagnostics": failure_diagnostics,
             "allow_rich_in_production": allow_rich_in_production,
             "app_roots": app_roots,
+            "suppress_traceback": suppress_traceback,
             # Without this, story() would auto-detect the caller's frame as
             # this decorator's own wrapper closure, reporting every decorated
             # story as "runtime_narrative.decorators" instead of func's module.

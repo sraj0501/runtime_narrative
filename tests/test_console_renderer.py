@@ -299,6 +299,18 @@ def test_log_recorded_uses_structlog_default_style_when_available(monkeypatch, c
     assert "warning" in out.lower()
 
 
+def test_log_recorded_does_not_duplicate_timestamp_with_structlog(monkeypatch, capsys) -> None:
+    pytest.importorskip("structlog")
+    r = ConsoleRenderer()
+    r.handle(_log_event())
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if "slow query" in l)
+    # The story tag ("2024-06-01 12:00:00.000 [......]") already carries the
+    # timestamp; structlog's own ConsoleRenderer must not print a second one
+    # (issue #41).
+    assert line.count("2024-06-01") == 1
+
+
 def test_level_icons_prepend_to_message(monkeypatch, capsys) -> None:
     monkeypatch.setattr(console_mod, "typer", None)
     monkeypatch.setattr(console_mod, "structlog", None)

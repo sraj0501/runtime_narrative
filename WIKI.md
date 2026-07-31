@@ -261,6 +261,7 @@ story(
     total_stages: int | None = None,
     dry_run: bool = False,
     module: str | None = None,
+    suppress_traceback: bool = False,
 )
 ```
 
@@ -283,6 +284,7 @@ story(
 | `total_stages` | `int \| None` | `None` | Declared total stages. Enables accurate progress percentages. Can also be set later via `runtime.set_total_stages(n)`. |
 | `dry_run` | `bool` | `False` | Stage exceptions are suppressed; all stages complete; story always succeeds. |
 | `module` | `str \| None` | auto-detected | The module that opened the story, shown by `ConsoleRenderer`. Auto-detected from the caller's frame via `sys._getframe(1)` (cheap — no stack walking) if not given. Pass explicitly when `story()` is opened from inside a wrapper (a decorator, middleware, etc.) so it doesn't report the wrapper's own module instead of the real call site — `@runtime_narrative_story` does this automatically with `func.__module__`. |
+| `suppress_traceback` | `bool` | `False` | When `True`, `story()` swallows the exception after emitting `FailureOccurred`/`StoryCompleted` instead of re-raising it — Python's own uncaught-exception traceback is not printed on top of the narration. `False` by default: the exception still propagates, matching plain `with`/`try` semantics. |
 
 ### Sync usage
 

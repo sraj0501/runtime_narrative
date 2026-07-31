@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQLite Persistence &amp; CLI — runtime-narrative</title>
+<meta name="description" content="Persist story, stage, and failure events to SQLite with SqliteStoryRenderer, then query them with the runtime-narrative CLI.">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body data-page="persistence-cli">
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/index.html">
+      <span class="brand-mark">▶</span>
+      runtime-narrative
+    </a>
+    <nav class="topbar-nav">
+      <a href="/docs/installation.html" class="active">Docs</a>
+      <a href="/docs/examples.html">Examples</a>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" type="button">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener" aria-label="GitHub repository">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.7 5.6.7 12c0 5.1 3.3 9.4 7.9 11 .6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.2-1.7-1.2-1.7-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.8 2.7 1.2 3.3 1 .1-.7.4-1.2.7-1.5-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.1-3.1-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.8 1.1 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.6 7.9-5.9 7.9-11C23.3 5.6 18.3.5 12 .5Z"/></svg>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="Toggle navigation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="sidebar-search-input" type="search" placeholder="Filter docs…" autocomplete="off">
+    </div>
+    <div id="sidebar-nav"><div class="nav-empty">Loading…</div></div>
+  </nav>
+
+  <main class="content">
+    <article class="prose">
+      <h1>SQLite Persistence &amp; CLI</h1>
+      <p class="lede"><code>SqliteStoryRenderer</code> writes every story, stage, and failure to a SQLite database as it happens. The bundled <code>runtime-narrative</code> CLI reads that database back for post-hoc inspection, and since it's plain SQLite you can also query it directly.</p>
+
+      <h2>Schema</h2>
+      <p><code>SqliteStoryRenderer</code> creates three tables on first use.</p>
+
+      <h3>stories — one row per story</h3>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>story_id</code></td><td>TEXT PK</td><td>UUID</td></tr>
+          <tr><td><code>name</code></td><td>TEXT</td><td>Story name</td></tr>
+          <tr><td><code>started_at</code></td><td>TEXT</td><td>ISO-8601 timestamp</td></tr>
+          <tr><td><code>completed_at</code></td><td>TEXT</td><td>ISO-8601 timestamp</td></tr>
+          <tr><td><code>success</code></td><td>INTEGER</td><td>1 = success, 0 = failed</td></tr>
+          <tr><td><code>duration_seconds</code></td><td>REAL</td><td>Computed from timestamps via <code>julianday</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>stages — one row per stage execution</h3>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>INTEGER PK</td><td>Auto-increment</td></tr>
+          <tr><td><code>story_id</code></td><td>TEXT</td><td>FK to stories</td></tr>
+          <tr><td><code>stage_name</code></td><td>TEXT</td><td>Stage name</td></tr>
+          <tr><td><code>stage_index</code></td><td>INTEGER</td><td>Position in story</td></tr>
+          <tr><td><code>parent_stage_name</code></td><td>TEXT</td><td>Null for top-level stages</td></tr>
+          <tr><td><code>started_at</code></td><td>TEXT</td><td></td></tr>
+          <tr><td><code>completed_at</code></td><td>TEXT</td><td></td></tr>
+          <tr><td><code>duration_seconds</code></td><td>REAL</td><td></td></tr>
+          <tr><td><code>completed</code></td><td>INTEGER</td><td>1 when <code>StageCompleted</code> emitted</td></tr>
+          <tr><td><code>failed</code></td><td>INTEGER</td><td>1 when <code>FailureOccurred</code> emitted</td></tr>
+        </tbody>
+      </table>
+
+      <h3>failures — one row per failure</h3>
+      <table>
+        <thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>INTEGER PK</td><td>Auto-increment</td></tr>
+          <tr><td><code>story_id</code></td><td>TEXT</td><td>FK to stories</td></tr>
+          <tr><td><code>stage_name</code></td><td>TEXT</td><td>Stage where failure occurred</td></tr>
+          <tr><td><code>error_type</code></td><td>TEXT</td><td>Exception class name</td></tr>
+          <tr><td><code>error_message</code></td><td>TEXT</td><td><code>str(exc)</code></td></tr>
+          <tr><td><code>filename</code></td><td>TEXT</td><td>Primary frame path</td></tr>
+          <tr><td><code>lineno</code></td><td>INTEGER</td><td>Primary frame line number</td></tr>
+          <tr><td><code>function</code></td><td>TEXT</td><td>Primary frame function name</td></tr>
+          <tr><td><code>source_line</code></td><td>TEXT</td><td>Failing source line</td></tr>
+          <tr><td><code>traceback_text</code></td><td>TEXT</td><td>Full traceback</td></tr>
+          <tr><td><code>exception_chain</code></td><td>TEXT</td><td></td></tr>
+          <tr><td><code>llm_analysis</code></td><td>TEXT</td><td>Null until <code>LLMAnalysisReady</code> back-fills it</td></tr>
+          <tr><td><code>occurred_at</code></td><td>TEXT</td><td><code>datetime('now')</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2>Wiring up the renderer</h2>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">from runtime_narrative import story, stage
+from runtime_narrative.renderer.persistence_renderer import SqliteStoryRenderer
+
+db = SqliteStoryRenderer("narrative.db")
+
+with story("User Import", renderers=[db], total_stages=2):
+    with stage("Fetch"):
+        users = [{"id": 1, "name": "Alice"}]
+    with stage("Upsert"):
+        pass</code></pre>
+      </div>
+
+      <h2>CLI</h2>
+      <p>The <code>runtime-narrative</code> CLI is registered as a console script at install time.</p>
+
+      <h3>List recent failures</h3>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>bash</span></div>
+        <pre><code class="language-bash"># Last 10 failures in the default database
+runtime-narrative failures
+
+# Last 25 failures in a custom database
+runtime-narrative failures --db narrative.db --last 25
+
+# Filter by stage name
+runtime-narrative failures --stage "Upsert"
+
+# Filter by story name
+runtime-narrative failures --story "User Import"
+
+# Combine filters
+runtime-narrative failures --stage "Charge Card" --story "Order%" --last 5</code></pre>
+      </div>
+
+      <h3>Show full details for a specific story</h3>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>bash</span></div>
+        <pre><code class="language-bash">runtime-narrative story &lt;story_id&gt;
+runtime-narrative story a1b2c3d4 --db narrative.db</code></pre>
+      </div>
+      <p>The <code>story</code> subcommand prints the story summary, a table of all stages with status and duration, and full failure details including LLM analysis when available.</p>
+
+      <h3>Direct SQL access</h3>
+      <p>Since the database is plain SQLite you can query it directly with any tool.</p>
+      <div class="code-block has-head">
+        <div class="code-block-head"><span>python</span></div>
+        <pre><code class="language-python">import sqlite3
+
+conn = sqlite3.connect("narrative.db")
+
+# Failed stories in the last hour
+rows = conn.execute("""
+    SELECT name, duration_seconds, completed_at
+    FROM stories
+    WHERE success = 0
+      AND completed_at > datetime('now', '-1 hour')
+    ORDER BY completed_at DESC
+""").fetchall()
+
+# Most common failure types
+rows = conn.execute("""
+    SELECT error_type, COUNT(*) as count
+    FROM failures
+    GROUP BY error_type
+    ORDER BY count DESC
+""").fetchall()</code></pre>
+      </div>
+
+      <div class="callout callout-note">
+        <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p class="callout-title">Next step</p>
+          <p>See <a href="/docs/testing.html">Testing with StoryRecorder</a> for asserting on stage completion and failures in unit tests, without needing a database at all.</p>
+        </div>
+      </div>
+
+    </article>
+
+    <nav class="page-nav" id="page-nav" aria-label="Page navigation"></nav>
+  </main>
+
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="footer-col">
+      <h4>Docs</h4>
+      <a href="/docs/installation.html">Installation</a>
+      <a href="/docs/quickstart.html">Quick Start</a>
+      <a href="/docs/story.html">story()</a>
+      <a href="/docs/renderers.html">Renderers</a>
+      <a href="/docs/events.html">Event Reference</a>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://pypi.org/project/runtime-narrative/" target="_blank" rel="noopener">PyPI</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
+    </div>
+    <div class="footer-col">
+      <h4>Community</h4>
+      <a href="https://github.com/sraj0501/runtime_narrative/issues" target="_blank" rel="noopener">Report an issue</a>
+      <a href="https://github.com/sraj0501/runtime_narrative/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 runtime-narrative. MIT licensed.</span>
+    <span>Built for Python 3.9+</span>
+  </div>
+</footer>
+
+<script src="/assets/nav-data.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>
