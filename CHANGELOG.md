@@ -6,9 +6,10 @@ All notable changes to `runtime-narrative` are documented here.
 
 ## 1.5.4 — 2026-07-24
 
-Two fixes reported via GitHub issues #41 and #42. No breaking changes.
+Two fixes reported via GitHub issues #41 and #42, plus a full documentation website. No breaking changes.
 
 ### Added
+- **Documentation website** (`website/`) — a complete, static (no build step) docs site: a landing page plus 21 pages covering the full public API, from installation through the event schema. Deploys as-is to Netlify via `netlify.toml` (publish directory `website`, no build command). Shared vanilla JS/CSS design system with light/dark theme toggle, responsive sidebar nav, scrollspy table of contents, prev/next page links, and copy-to-clipboard code blocks — no external dependencies or CDN calls. See `WEBSITE_CONTRIBUTING.md` for page conventions.
 - **`story(..., suppress_traceback=True)`** (also forwarded by `@runtime_narrative_story`) — when set, `story()` swallows the exception after emitting `FailureOccurred`/`StoryCompleted` instead of re-raising it, so Python's own uncaught-exception traceback isn't printed on top of the narration. **Off by default** — `story()` still re-raises, matching plain `with`/`try` semantics. This is intentional, not just a conservative default: `RuntimeNarrativeMiddleware`, Celery's `NarrativeTask`, and `NarrativeTaskGroup` all open their own `story()` internally and depend on the exception propagating out of it to drive HTTP error responses, task retries, and error aggregation respectively — a default of `True` would silently break all three. Only set it on `story()` calls you fully own, once you've decided the `FailureOccurred` narration is sufficient on its own. See [README](README.md#suppressing-the-raw-traceback) and [WIKI §5](WIKI.md#5-story--the-story-context-manager). (#42 — the trailing traceback readers were seeing wasn't emitted by `runtime_narrative` at all; it was the interpreter's default handler for the exception the story intentionally re-raises. This option gives callers who consider the narration sufficient a way to opt out of that re-raise.)
 
 ### Fixed
