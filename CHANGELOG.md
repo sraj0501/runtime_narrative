@@ -4,6 +4,13 @@ All notable changes to `runtime-narrative` are documented here.
 
 ---
 
+## Unreleased
+
+### Documentation
+- The [documentation website](https://runtime-narrative.netlify.app/) is now live, with a landing page and 23 guides and reference pages. The repository's `netlify.toml` deploys the static files from `website/`.
+
+---
+
 ## 1.5.4 — 2026-07-24
 
 Two fixes reported via GitHub issues #41 and #42, plus a full documentation website. No breaking changes.
