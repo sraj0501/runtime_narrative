@@ -62,7 +62,7 @@ Items within each phase are roughly priority-ordered. Phases are sequential in i
 - **`suppress_traceback` and documentation website** (`v1.5.4`)
   - `story(..., suppress_traceback=True)` — opt-in swallow of the exception after narration, instead of re-raising it into Python's default traceback printer
   - `ConsoleRenderer` — fixed duplicate timestamp on `LogRecorded` lines under the `structlog` extra
-  - Full static documentation website under `website/`, deployed via Netlify (`netlify.toml`)
+  - [Full static documentation website](https://runtime-narrative.netlify.app/) under `website/`, deployed via Netlify (`netlify.toml`)
 
 ---
 

@@ -21,7 +21,7 @@ Turn any Python execution into a traceable **story** composed of named **stages*
   Use INSERT OR IGNORE, or check for an existing row before inserting.
 ```
 
-This README is a fast on-ramp. For complete API reference, every renderer/analyzer/integration in depth, and the full event schema, see **[WIKI.md](WIKI.md)**.
+This README is a fast on-ramp. Read the [documentation website](https://runtime-narrative.netlify.app/) for the guided tutorial, examples, and API reference, or use [WIKI.md](WIKI.md) for the complete guide in this repository.
 
 ## Why
 
@@ -357,6 +357,7 @@ Python 3.9+. Async task groups (`NarrativeTaskGroup`) require no additional depe
 
 ## More
 
+- **[Documentation website](https://runtime-narrative.netlify.app/)** — guided tutorial, examples, and API reference.
 - **[WIKI.md](WIKI.md)** — complete reference: every parameter, every renderer, every event field.
 - **[CHANGELOG.md](CHANGELOG.md)** — what changed in each release.
 - **[ROADMAP.md](ROADMAP.md)** — what's shipped and what's next.
