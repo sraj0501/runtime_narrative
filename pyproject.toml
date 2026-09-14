@@ -75,6 +75,7 @@ runtime-narrative = "runtime_narrative.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/sraj0501/runtime_narrative"
+Documentation = "https://runtime-narrative.netlify.app/"
 Repository = "https://github.com/sraj0501/runtime_narrative"
 "Bug Tracker" = "https://github.com/sraj0501/runtime_narrative/issues"
 
