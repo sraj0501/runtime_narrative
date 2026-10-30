@@ -21,7 +21,9 @@ Turn any Python execution into a traceable **story** composed of named **stages*
   Use INSERT OR IGNORE, or check for an existing row before inserting.
 ```
 
-This README is a fast on-ramp. Read the [documentation website](https://runtime-narrative.netlify.app/) for the guided tutorial, examples, and API reference, or use [WIKI.md](WIKI.md) for the complete guide in this repository.
+The [project website source](https://github.com/shashankraj1987/mogrov.com/tree/main/sites/runtime-narrative) and documentation are maintained in Mogrov.
+
+This README is a fast on-ramp. Read the [documentation website](https://mogrov.com/wiki/runtime-narrative/) for the guided tutorial, examples, and API reference, or use [Complete guide](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md) for the complete guide maintained by Mogrov.
 
 ## Why
 
@@ -109,7 +111,7 @@ async def create_order():
 
 This holds up under concurrency for free: `asyncio.Task` copies `ContextVar` state at creation and each OS thread starts with a fresh top-level context, so many concurrent callers sharing one helper (like `execute_query` above) never cross-link into each other's tree.
 
-Run: `uv run python examples/substory_db_call.py` — full reference: [WIKI §21](WIKI.md#21-sub-stories-and-log-capture)
+Run: `uv run python examples/substory_db_call.py` — full reference: [Guide §21](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#21-sub-stories-and-log-capture)
 
 ---
 
@@ -148,7 +150,7 @@ renderers = [
 ]
 ```
 
-Run: `uv run python examples/logging_bridge.py`, `uv run python examples/structured_log_routing.py` — full reference: [WIKI §21](WIKI.md#21-sub-stories-and-log-capture)
+Run: `uv run python examples/logging_bridge.py`, `uv run python examples/structured_log_routing.py` — full reference: [Guide §21](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#21-sub-stories-and-log-capture)
 
 ---
 
@@ -220,7 +222,7 @@ Every `ConsoleRenderer` line also carries a `YYYY-MM-DD HH:MM:SS.mmm` timestamp,
 2026-07-03 12:03:41.211 [abcdef]   ▶ Stage started: Insert Record (app.db)
 ```
 
-Run: `uv run python examples/colorful_errors_and_emojis.py` — full reference: [WIKI §10.1](WIKI.md#101-consolerenderer), [§10.1b](WIKI.md#101b-coalescingrenderer)
+Run: `uv run python examples/colorful_errors_and_emojis.py` — full reference: [Guide §10.1](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#101-consolerenderer), [§10.1b](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#101b-coalescingrenderer)
 
 ---
 
@@ -246,7 +248,7 @@ with story("Linked List Checks", suppress_traceback=True):
 
 **This defaults to `False` and should stay that way for any `story()` you don't fully control the surrounding code for.** `RuntimeNarrativeMiddleware`, Celery's `NarrativeTask`, and `NarrativeTaskGroup` each open their own `story()` internally and rely on the exception propagating out of it — that's how a failed request becomes an HTTP 500, a failed task gets retried, and a failed sub-task shows up in `NarrativeTaskGroupError`. Turning this on for those would silently turn failures into "successes." Only set it on top-level `story()` calls you own, where you've already decided nothing outside the block needs to see the exception — e.g. a script's `main()`, or a batch job that logs and moves on to the next item.
 
-Full reference: [WIKI §5](WIKI.md#5-story--the-story-context-manager).
+Full reference: [Guide §5](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#5-story--the-story-context-manager).
 
 ---
 
@@ -256,21 +258,21 @@ Everything below works the same way in every context (sync/async, decorators, au
 
 | Area | What you get | Full reference |
 |---|---|---|
-| Decorators | `@runtime_narrative_story` / `@runtime_narrative_stage` — wrap functions without restructuring call sites | [WIKI §7](WIKI.md#7-decorators) |
-| Auto-instrumentation | `@narrative_class`, `@no_stage`, `instrument_module()`, `auto_instrument()` — instrument classes/modules with zero call-site changes | [WIKI §8](WIKI.md#8-auto-instrumentation) |
-| Failure diagnostics | Lean/rich modes, production traceback caps, secret redaction, `FailureDiagnosticsConfig` | [WIKI §9](WIKI.md#9-failure-diagnostics) |
-| Failure analyzers | `OllamaFailureAnalyzer`, `LLMFailureAnalyzer`, `AnthropicFailureAnalyzer`, `DeduplicatingAnalyzer`, `background_analysis=True` | [WIKI §9](WIKI.md#9-failure-diagnostics), [§16](WIKI.md#16-background-analysis) |
-| Renderers | `ConsoleRenderer` (optional file `output=`), `JsonRenderer`/`RotatingJsonRenderer`, `HtmlReportRenderer`, `SqliteStoryRenderer`, `OtelRenderer`/`OtelLogRenderer`/`OtelMetricsRenderer`, `PrometheusRenderer`, `AlertRoutingRenderer`, `FilteredRenderer`, `CoalescingRenderer` | [WIKI §10](WIKI.md#10-renderers) |
-| Framework integrations | FastAPI/Starlette middleware, Django ASGI/WSGI middleware, Celery task base class, gRPC interceptors | [WIKI §11](WIKI.md#11-framework-integrations) |
-| Async task groups | `NarrativeTaskGroup` — concurrent `asyncio` tasks under one shared story | [WIKI §12](WIKI.md#12-async-task-groups) |
-| Persistence & CLI | `SqliteStoryRenderer` + `runtime-narrative failures` / `runtime-narrative story <id>` | [WIKI §13](WIKI.md#13-sqlite-persistence-and-cli) |
-| Testing | `StoryRecorder` — dual sync/async assertion API, no output produced | [WIKI §14](WIKI.md#14-testing-with-storyrecorder) |
-| `dry_run` mode | Suppress stage-body exceptions; verify instrumentation wiring with no side effects | [WIKI §15](WIKI.md#15-dry_run-mode) |
-| `suppress_traceback` | Swallow the exception after narrating it, so Python's own uncaught-exception traceback isn't printed on top — off by default, see [above](#suppressing-the-raw-traceback) | [WIKI §5](WIKI.md#5-story--the-story-context-manager) |
-| Custom renderers/analyzers | Any `handle(event)` object is a renderer; any `analyze_failure(...)` object is an analyzer | [WIKI §17](WIKI.md#17-custom-renderers), [§18](WIKI.md#18-custom-failure-analyzers) |
-| Utilities | `has_active_story()`, `stage(optional=True)` for library code that may run with or without a story | [WIKI §6](WIKI.md#6-stage--stage-context-managers) |
-| `StoryRuntime.record_failure()` | Record a failure in saga/rollback flows without owning exception propagation | [WIKI §5](WIKI.md#5-story--the-story-context-manager) |
-| Event schema | All seven event dataclasses and their fields | [WIKI §20](WIKI.md#20-event-reference) |
+| Decorators | `@runtime_narrative_story` / `@runtime_narrative_stage` — wrap functions without restructuring call sites | [Guide §7](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#7-decorators) |
+| Auto-instrumentation | `@narrative_class`, `@no_stage`, `instrument_module()`, `auto_instrument()` — instrument classes/modules with zero call-site changes | [Guide §8](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#8-auto-instrumentation) |
+| Failure diagnostics | Lean/rich modes, production traceback caps, secret redaction, `FailureDiagnosticsConfig` | [Guide §9](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#9-failure-diagnostics) |
+| Failure analyzers | `OllamaFailureAnalyzer`, `LLMFailureAnalyzer`, `AnthropicFailureAnalyzer`, `DeduplicatingAnalyzer`, `background_analysis=True` | [Guide §9](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#9-failure-diagnostics), [§16](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#16-background-analysis) |
+| Renderers | `ConsoleRenderer` (optional file `output=`), `JsonRenderer`/`RotatingJsonRenderer`, `HtmlReportRenderer`, `SqliteStoryRenderer`, `OtelRenderer`/`OtelLogRenderer`/`OtelMetricsRenderer`, `PrometheusRenderer`, `AlertRoutingRenderer`, `FilteredRenderer`, `CoalescingRenderer` | [Guide §10](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#10-renderers) |
+| Framework integrations | FastAPI/Starlette middleware, Django ASGI/WSGI middleware, Celery task base class, gRPC interceptors | [Guide §11](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#11-framework-integrations) |
+| Async task groups | `NarrativeTaskGroup` — concurrent `asyncio` tasks under one shared story | [Guide §12](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#12-async-task-groups) |
+| Persistence & CLI | `SqliteStoryRenderer` + `runtime-narrative failures` / `runtime-narrative story <id>` | [Guide §13](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#13-sqlite-persistence-and-cli) |
+| Testing | `StoryRecorder` — dual sync/async assertion API, no output produced | [Guide §14](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#14-testing-with-storyrecorder) |
+| `dry_run` mode | Suppress stage-body exceptions; verify instrumentation wiring with no side effects | [Guide §15](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#15-dry_run-mode) |
+| `suppress_traceback` | Swallow the exception after narrating it, so Python's own uncaught-exception traceback isn't printed on top — off by default, see [above](#suppressing-the-raw-traceback) | [Guide §5](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#5-story--the-story-context-manager) |
+| Custom renderers/analyzers | Any `handle(event)` object is a renderer; any `analyze_failure(...)` object is an analyzer | [Guide §17](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#17-custom-renderers), [§18](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#18-custom-failure-analyzers) |
+| Utilities | `has_active_story()`, `stage(optional=True)` for library code that may run with or without a story | [Guide §6](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#6-stage--stage-context-managers) |
+| `StoryRuntime.record_failure()` | Record a failure in saga/rollback flows without owning exception propagation | [Guide §5](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#5-story--the-story-context-manager) |
+| Event schema | All seven event dataclasses and their fields | [Guide §20](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md#20-event-reference) |
 
 ---
 
@@ -357,7 +359,7 @@ Python 3.9+. Async task groups (`NarrativeTaskGroup`) require no additional depe
 
 ## More
 
-- **[Documentation website](https://runtime-narrative.netlify.app/)** — guided tutorial, examples, and API reference.
-- **[WIKI.md](WIKI.md)** — complete reference: every parameter, every renderer, every event field.
+- **[Documentation website](https://mogrov.com/wiki/runtime-narrative/)** — guided tutorial, examples, and API reference.
+- **[Complete guide](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md)** — complete reference: every parameter, every renderer, every event field.
 - **[CHANGELOG.md](CHANGELOG.md)** — what changed in each release.
 - **[ROADMAP.md](ROADMAP.md)** — what's shipped and what's next.
