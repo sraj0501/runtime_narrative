@@ -12,7 +12,7 @@ The narration uses FFmpeg's offline Flite voice. It is a complete first cut, but
 
 Learn Runtime Narrative with a full customer-import walkthrough. We compare a raw Python traceback with a named execution story, then use `story()` and `stage()`, read a successful run, diagnose a deliberate failure, and follow a nested async database call. The core examples run locally without an AI account.
 
-Documentation: https://runtime-narrative.netlify.app/  
+Documentation: https://mogrov.com/wiki/runtime-narrative/
 Source and examples: https://github.com/sraj0501/runtime_narrative  
 Package: https://pypi.org/project/runtime-narrative/
 
