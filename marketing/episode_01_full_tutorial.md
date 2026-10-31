@@ -27,7 +27,7 @@ Run `uv run python examples/basic.py`. **Expected:** two completed stages, `Inse
 
 ## Clip 2 — Install and the two core concepts (about 5 minutes)
 
-**Screen:** the [installation page](https://runtime-narrative.netlify.app/docs/installation.html), then `examples/success.py` in the editor. Show the command `pip install runtime-narrative` as text; the repo is already prepared, so do not spend recording time downloading dependencies.
+**Screen:** the [installation page](https://mogrov.com/wiki/runtime-narrative/installation.html), then `examples/success.py` in the editor. Show the command `pip install runtime-narrative` as text; the repo is already prepared, so do not spend recording time downloading dependencies.
 
 **Say:**
 
@@ -81,7 +81,7 @@ Point out the `async with` form. The sync and async APIs share the same story/st
 
 ## Clip 5 — What to try next and close (about 5 minutes)
 
-**Screen:** `examples/diagnostics_config.py`, the [online docs](https://runtime-narrative.netlify.app/), then a terminal with a compact recap of the four commands. Do not run an LLM demo in Episode 1; it adds a model setup dependency and deserves its own episode.
+**Screen:** `examples/diagnostics_config.py`, the [online docs](https://mogrov.com/wiki/runtime-narrative/), then a terminal with a compact recap of the four commands. Do not run an LLM demo in Episode 1; it adds a model setup dependency and deserves its own episode.
 
 **Say:**
 
@@ -112,7 +112,7 @@ uv run python examples/diagnostics_config.py        # optional preview, syntheti
 
 > In this full tutorial, we turn a Python traceback into a named execution story. You'll use `story()` and `stage()`, compare context managers with decorators, read a narrated failure, and follow a nested DB call. The core walkthrough needs no LLM account or paid service. Recorded against runtime-narrative 1.5.4.  
 >  
-> Documentation: https://runtime-narrative.netlify.app/  
+> Documentation: https://mogrov.com/wiki/runtime-narrative/
 > Source and examples: https://github.com/sraj0501/runtime_narrative  
 > Install: https://pypi.org/project/runtime-narrative/  
 >  

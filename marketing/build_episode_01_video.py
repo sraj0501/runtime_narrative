@@ -452,7 +452,7 @@ def draw_scene(scene: dict, index: int) -> Image.Image:
             text(d, (208, y + 22), item, 29, WHITE, bold=True)
     d.line((72, 661, 1208, 661), fill="#3a4d69", width=2)
     d.rectangle((72, 658, 72 + int(1136 * index / len(SCENES)), 664), fill=CYAN)
-    text(d, (72, 674), "runtime-narrative.netlify.app", 17, MUTED)
+    text(d, (72, 674), "mogrov.com", 17, MUTED)
     text(d, (1075, 674), f"{index:02d} / {len(SCENES):02d}", 17, MUTED, mono=True)
     return im
 

@@ -8,8 +8,8 @@ Audience: Python developers who know functions and exceptions but have never use
 | 2 | **Instrument a real FastAPI app** · 30–40 min | Add middleware, see request stories, stage an API route, attach an outcome, and follow a request through the DB helper. | `examples/fastapi_app/`, `examples/middleware_skip_if.py`, `examples/fastapi_ugly_traceback_demo.py` |
 | 3 | **Failure diagnostics and optional LLM analysis** · 30–40 min | Compare lean/rich modes, explain redaction and production defaults, then run an optional local Ollama analysis and background mode. | `examples/diagnostics_config.py`, `examples/basic_ollama.py`, `examples/background_analysis.py`, `examples/anthropic_analyzer.py` |
 | 4 | **Instrument existing code without rewriting it** · 25–35 min | Use function/class/module instrumentation and fold existing `logging` calls into the story stream. | `examples/narrative_class.py`, `examples/instrument_module.py`, `examples/auto_instrument.py`, `examples/logging_bridge.py`, `examples/structured_log_routing.py` |
-| 5 | **Where the events go: renderers and persistence** · 30–40 min | Explain the event model; generate JSON, HTML and SQLite output; query the CLI; introduce OTel/Prometheus as downstream integrations. | `examples/html_report.py`, `examples/sqlite_persistence.py`, `examples/otel_tracing.py`, `runtime_narrative/events.py`, `website/docs/renderers.html` |
-| 6 | **Test and operate a narrated workflow** · 25–35 min | Assert events with `StoryRecorder`, use task groups and explicit failure recording, and explain when `dry_run` and traceback suppression are appropriate. | `examples/story_recorder.py`, `examples/task_group.py`, `examples/saga_record_failure.py`, `examples/dry_run_mode.py`, `website/docs/testing.html` |
+| 5 | **Where the events go: renderers and persistence** · 30–40 min | Explain the event model; generate JSON, HTML and SQLite output; query the CLI; introduce OTel/Prometheus as downstream integrations. | `examples/html_report.py`, `examples/sqlite_persistence.py`, `examples/otel_tracing.py`, `runtime_narrative/events.py`, [renderers guide](https://mogrov.com/wiki/runtime-narrative/renderers.html) |
+| 6 | **Test and operate a narrated workflow** · 25–35 min | Assert events with `StoryRecorder`, use task groups and explicit failure recording, and explain when `dry_run` and traceback suppression are appropriate. | `examples/story_recorder.py`, `examples/task_group.py`, `examples/saga_record_failure.py`, `examples/dry_run_mode.py`, [testing guide](https://mogrov.com/wiki/runtime-narrative/testing.html) |
 
 ## Teaching rules across the series
 
@@ -18,7 +18,7 @@ Audience: Python developers who know functions and exceptions but have never use
 - Do not imply `dry_run=True` prevents side effects: it suppresses exceptions raised inside stage bodies, but those bodies still execute.
 - Do not imply all secrets are redacted. Rich-mode local-variable redaction does not sanitize arbitrary exception messages or `logging` extra fields.
 - Use a real terminal when showing the human-readable console renderer. The FastAPI middleware selects JSON by default when stdout is not a TTY; the first episode's direct `story()` examples use the console renderer.
-- Include the [live docs](https://runtime-narrative.netlify.app/), [GitHub repo](https://github.com/sraj0501/runtime_narrative), and [PyPI package](https://pypi.org/project/runtime-narrative/) in every description.
+- Include the [live docs](https://mogrov.com/wiki/runtime-narrative/), [GitHub repo](https://github.com/sraj0501/runtime_narrative), and [PyPI package](https://pypi.org/project/runtime-narrative/) in every description.
 
 ## Suggested production order
 

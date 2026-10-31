@@ -237,7 +237,7 @@ app.add_middleware(RuntimeNarrativeMiddleware, renderers=renderers, failure_anal
 > console, JSON, OpenTelemetry, Prometheus, HTML, Slack.
 >
 > It's one `pip install runtime-narrative` away. The package, examples, and
-> [online documentation](https://runtime-narrative.netlify.app/) are linked in the description.
+> [online documentation](https://mogrov.com/wiki/runtime-narrative/) are linked in the description.
 >
 > If this saved you twenty minutes of grepping through logs at some point in the future,
 > that's the whole point — star the repo, it genuinely helps other people find it, and drop
