@@ -1,6 +1,8 @@
 # Flagship video script — "Your logs are lying to you"
 
-Target length: 16-18 minutes. Format: screen recording + facecam voiceover (talking-head
+This is the short overview. For a beginner-friendly, detailed screen-recording series, use the [series plan](youtube_series_plan.md), [creator guide](youtube_creator_guide.md), and [Episode 1 script](episode_01_full_tutorial.md).
+
+Target length: 16-18 minutes. Format: screen recording + voiceover (facecam
 optional at hook/CTA, screen-only for demos). Every demo command below is a real file in
 this repo — run them exactly as written while recording, don't retype code on camera.
 
@@ -162,9 +164,9 @@ failure box with source snippet and stack summary.
 > not 'check your database connection,' an actual diagnosis of *this* bug."
 
 > Optional aside if time allows: mention `background_analysis=True` (point at
-> `examples/background_analysis.py`) — "for latency-sensitive paths, the failure renders
-> immediately and the LLM analysis streams in a few hundred milliseconds later as a separate
-> event, so you're never blocking a request on a model call."
+> `examples/background_analysis.py`) — "for latency-sensitive async paths, the failure renders
+> immediately and the LLM result arrives later as a separate event when the model finishes,
+> so story exit does not wait for the model call."
 
 ---
 
@@ -200,10 +202,10 @@ app.add_middleware(RuntimeNarrativeMiddleware, renderers=renderers, failure_anal
 
 > Run: `uv run python examples/substory_db_call.py`
 
-> Point at the indented, `[short_id]`-tagged output tree on screen. "Same colored ID down the
-> whole family, indented by nesting depth. This is a full call tree — for free — because
-> `asyncio.Task` and thread-local context propagate it for you. It holds up under real
-> concurrency: many callers sharing one DB helper never cross-link into each other's tree."
+> Point at the indented, `[short_id]`-tagged output tree on screen. "Parent and child have
+> different IDs but share a root ID, and the output is indented by nesting depth. Python's
+> `ContextVar` carries the active story into child asyncio tasks, so concurrent callers using
+> the same DB helper can keep their call trees separate."
 
 ---
 
@@ -220,7 +222,7 @@ app.add_middleware(RuntimeNarrativeMiddleware, renderers=renderers, failure_anal
 4. **Prometheus** — mention briefly, no need to run live — "duration histograms and failure counters, if metrics are your thing."
 5. **Slack / webhook alerting** — `uv run python examples/alert_routing.py` — "fires only on failure, fans out to as many destinations as you want concurrently, filterable by exception type."
 
-> "Same six lifecycle events, as many renderers listening as you want, mix and match.
+> "Same event stream, as many renderers listening as you want, mix and match.
 > Nothing here required you to change how you write the story/stage code itself."
 
 ---
@@ -234,8 +236,8 @@ app.add_middleware(RuntimeNarrativeMiddleware, renderers=renderers, failure_anal
 > analysis when you want it, and it plugs into whatever you're already using downstream —
 > console, JSON, OpenTelemetry, Prometheus, HTML, Slack.
 >
-> It's one `pip install runtime-narrative` away. Link's in the description, along with the
-> full wiki covering every renderer and integration in depth.
+> It's one `pip install runtime-narrative` away. The package, examples, and
+> [online documentation](https://runtime-narrative.netlify.app/) are linked in the description.
 >
 > If this saved you twenty minutes of grepping through logs at some point in the future,
 > that's the whole point — star the repo, it genuinely helps other people find it, and drop

@@ -39,5 +39,8 @@ htmlcov/
 # Data
 *.db
 
+# Rendered video and intermediate media (large, reproducible artifacts)
+marketing/video_outputs/
+
 # Claude Settings
 .claude/
