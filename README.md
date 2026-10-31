@@ -21,9 +21,13 @@ Turn any Python execution into a traceable **story** composed of named **stages*
   Use INSERT OR IGNORE, or check for an existing row before inserting.
 ```
 
-The [project website source](https://github.com/shashankraj1987/mogrov.com/tree/main/sites/runtime-narrative) and documentation are maintained in Mogrov.
+The standalone project website source is in [`website/`](website/). Mogrov maintains the public documentation and a snapshot of the project site at `/runtime-narrative/`.
 
 This README is a fast on-ramp. Read the [documentation website](https://mogrov.com/wiki/runtime-narrative/) for the guided tutorial, examples, and API reference, or use [Complete guide](https://github.com/shashankraj1987/mogrov.com/blob/main/documentation/runtime-narrative/COMPLETE_GUIDE.md) for the complete guide maintained by Mogrov.
+
+## Website deployment
+
+`website/` is a standalone static site. Set the hosting output directory to `website` with no build command. The site links to the documentation at `https://mogrov.com/wiki/runtime-narrative/`; old `/docs/` routes are covered by `website/_redirects` on compatible hosts. Keep the Mogrov `sites/runtime-narrative/` snapshot in sync when changing this site, so the combined Mogrov path remains current.
 
 ## Why
 
